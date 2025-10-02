@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Ausgangsrechnungen – Rechnungen (Mockup)</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <aside class="seitenleiste" aria-label="Hauptnavigation">
+  <div class="logo">
+    <img src="assets/logo.svg" alt="Logo"/>
+    <div><strong>Rechnungen</strong></div>
+  </div>
+  <nav>
+    <a href="index.html" class="">Übersicht</a>
+    <a href="eingangsrechnungen.html" class="">Eingangsrechnungen</a>
+    <a href="ausgangsrechnungen.html" class="aktiv">Ausgangsrechnungen</a>
+    <a href="hochladen.html" class="">Belege hochladen</a>
+    <a href="einstellungen.html" class="">Einstellungen</a>
+  </nav>
+  <div style="margin-top:auto" class="hinweis">Dies sind statische Entwürfe zur Veranschaulichung.</div>
+</aside>
+  <div class="hülle">
+    <div class="kopfleiste">
+      <strong>Ausgangsrechnungen</strong>
+      <div class="reihe" style="flex:1; margin-left:12px">
+        <div class="suche"><input type="search" placeholder="Suchen …" aria-label="Suchen"/></div>
+        <a href="ausgangsrechnung_neu.html" class="knopf">Neue Ausgangsrechnung</a>
+      </div>
+    </div>
+    <main class="inhalt">
+      
+<section class="karte">
+  <div class="reihe" style="justify-content:space-between">
+    <h3 style="margin:0">Ausgangsrechnungen</h3>
+    <div class="reihe">
+      <label class="hinweis">Status:
+        <select>
+          <option>alle</option>
+          <option>offen</option>
+          <option>bezahlt</option>
+          <option>überfällig</option>
+        </select>
+      </label>
+      <a class="knopf flach" href="#">Tabelle exportieren</a>
+    </div>
+  </div>
+  <table class="tabelle" aria-label="Ausgangsrechnungen Tabelle">
+    <thead><tr>
+      <th>Rechnungsdatum</th><th>Rechnungsnummer</th><th>Kunde</th><th>Fällig am</th><th>Betrag</th><th>Status</th><th>Aktionen</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td>10.09.2025</td><td>AR-2025-104</td><td>Müller Consulting</td><td>24.09.2025</td><td>€ 2.400,00</td>
+        <td><span class="plakette warn">offen</span></td>
+        <td class="reihe"><a class="knopf flach" href="ausgangsrechnung_vorschau.html">Ansehen</a><a class="knopf flach" href="ausgangsrechnung_neu.html">Bearbeiten</a><a class="knopf flach" href="#">Löschen</a></td>
+      </tr>
+      <tr>
+        <td>02.09.2025</td><td>AR-2025-105</td><td>Hahn eCom</td><td>16.09.2025</td><td>€ 1.499,00</td>
+        <td><span class="plakette ok">bezahlt</span></td>
+        <td class="reihe"><a class="knopf flach" href="ausgangsrechnung_vorschau.html">Ansehen</a><a class="knopf flach" href="ausgangsrechnung_neu.html">Bearbeiten</a><a class="knopf flach" href="#">Löschen</a></td>
+      </tr>
+      <tr>
+        <td>28.08.2025</td><td>AR-2025-102</td><td>Schneider &amp; Co. KG</td><td>11.09.2025</td><td>€ 3.250,00</td>
+        <td><span class="plakette schlecht">überfällig</span></td>
+        <td class="reihe"><a class="knopf flach" href="ausgangsrechnung_vorschau.html">Ansehen</a><a class="knopf flach" href="ausgangsrechnung_neu.html">Bearbeiten</a><a class="knopf flach" href="#">Löschen</a></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+    </main>
+  </div>
+</body>
+</html>

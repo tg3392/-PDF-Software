@@ -1,0 +1,86 @@
+/* Basistypografie und Layout (deutsche UI) */
+:root{
+  --hintergrund:#0f1420;
+  --fläche:#141b2a;
+  --rand:#22304a;
+  --text:#eaf0fb;
+  --muted:#a3b0c6;
+  --blau:#3b82f6;
+  --gruen:#23b26d;
+  --gelb:#e9b02c;
+  --rot:#e55353;
+  --schatten:0 8px 30px rgba(0,0,0,.28);
+}
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--hintergrund);
+  color:var(--text);
+  font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  display:flex;
+}
+
+/* Seitenleiste */
+.seitenleiste{
+  width:280px; background:var(--fläche); border-right:1px solid var(--rand);
+  padding:18px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:16px;
+}
+.logo{display:flex; align-items:center; gap:10px}
+.logo img{width:28px; height:28px}
+.logo strong{font-size:18px}
+nav a{
+  display:block; padding:10px 12px; border-radius:10px; color:var(--text); text-decoration:none; border:1px solid transparent;
+}
+nav a:hover{background:rgba(255,255,255,.05); border-color:var(--rand)}
+nav a.aktiv{background:rgba(59,130,246,.15); border-color:rgba(59,130,246,.35)}
+
+.hülle{flex:1; display:flex; flex-direction:column; min-width:0}
+.kopfleiste{display:flex; justify-content:space-between; align-items:center; padding:14px 20px; background:var(--fläche); border-bottom:1px solid var(--rand)}
+.suche{flex:1; margin-left:10px}
+.suche input{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--rand); background:#0e1421; color:var(--text)}
+
+.inhalt{padding:20px; display:grid; gap:16px}
+.karte{background:var(--fläche); border:1px solid var(--rand); border-radius:14px; padding:16px; box-shadow:var(--schatten)}
+
+.knopf{border:1px solid var(--rand); background:var(--blau); color:white; padding:8px 12px; border-radius:10px; cursor:pointer; text-decoration:none; display:inline-block}
+.knopf.flach{background:transparent; color:var(--text)}
+.knopf:disabled{opacity:.6; cursor:not-allowed}
+
+.kpis{display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:16px}
+.kpi{border:1px solid var(--rand); border-radius:12px; padding:14px; background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0))}
+.kpi .wert{font-weight:700; font-size:22px}
+.kpi .titel{color:var(--muted); font-size:12px}
+
+/* Tabelle */
+.tabelle{width:100%; border-collapse:collapse; font-size:14px}
+.tabelle th, .tabelle td{padding:10px 8px; border-bottom:1px solid var(--rand); white-space:nowrap; text-align:left}
+.tabelle th{color:var(--muted)}
+
+.plakette{padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid transparent; font-weight:700}
+.plakette.ok{background:rgba(35,178,109,.15); color:var(--gruen); border-color:rgba(35,178,109,.26)}
+.plakette.warn{background:rgba(233,176,44,.15); color:var(--gelb); border-color:rgba(233,176,44,.28)}
+.plakette.schlecht{background:rgba(229,83,83,.18); color:var(--rot); border-color:rgba(229,83,83,.30)}
+
+.reihe{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+
+/* Formular Ausgangsrechnung */
+.formular label{display:grid; gap:6px; font-size:14px}
+.formular input, .formular select, .formular textarea{
+  background:#0e1421; border:1px solid var(--rand); color:var(--text);
+  border-radius:10px; padding:10px 12px; width:100%;
+}
+.gitter{display:grid; gap:12px; grid-template-columns:repeat(2, minmax(0,1fr))}
+@media (max-width: 900px){ .gitter{grid-template-columns:1fr} }
+
+/* Vorschau Rechnung (druckähnlich) */
+.vorschau{background:white; color:#111; padding:32px; border-radius:10px}
+.vorschau h1{margin:0 0 12px 0}
+.vorschau table{width:100%; border-collapse:collapse; font-size:14px}
+.vorschau th, .vorschau td{border-bottom:1px solid #ddd; padding:8px 6px; text-align:left}
+.vorschau .summen td{border:none; text-align:right}
+.fuß{color:#555; font-size:12px; margin-top:12px}
+
+/* Dropzone */
+.ablage{border:2px dashed var(--rand); border-radius:16px; padding:28px; text-align:center; background:rgba(255,255,255,.03)}
+.ablage.aktiv{background:rgba(59,130,246,.15); border-color:rgba(59,130,246,.4)}
+.hinweis{color:var(--muted); font-size:13px}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Eingangsrechnungen – Rechnungen (Mockup)</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <aside class="seitenleiste" aria-label="Hauptnavigation">
+  <div class="logo">
+    <img src="assets/logo.svg" alt="Logo"/>
+    <div><strong>Rechnungen</strong></div>
+  </div>
+  <nav>
+    <a href="index.html" class="">Übersicht</a>
+    <a href="eingangsrechnungen.html" class="aktiv">Eingangsrechnungen</a>
+    <a href="ausgangsrechnungen.html" class="">Ausgangsrechnungen</a>
+    <a href="hochladen.html" class="">Belege hochladen</a>
+    <a href="einstellungen.html" class="">Einstellungen</a>
+  </nav>
+  <div style="margin-top:auto" class="hinweis">Dies sind statische Entwürfe zur Veranschaulichung.</div>
+</aside>
+  <div class="hülle">
+    <div class="kopfleiste">
+      <strong>Eingangsrechnungen</strong>
+      <div class="reihe" style="flex:1; margin-left:12px">
+        <div class="suche"><input type="search" placeholder="Suchen …" aria-label="Suchen"/></div>
+        <a href="ausgangsrechnung_neu.html" class="knopf">Neue Ausgangsrechnung</a>
+      </div>
+    </div>
+    <main class="inhalt">
+      
+<section class="karte">
+  <h3 style="margin:0 0 8px 0">Eingangsrechnungen</h3>
+  <p class="hinweis">Diese Seite zeigt analog zur Ausgangsrechnung eine Liste eingehender Belege mit Status und Fälligkeit.</p>
+  <table class="tabelle" aria-label="Eingangsrechnungen Tabelle">
+    <thead><tr><th>Rechnungsdatum</th><th>Rechnungsnummer</th><th>Lieferant</th><th>Fällig am</th><th>Betrag</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>12.09.2025</td><td>RE-2025-018</td><td>Cloudify GmbH</td><td>26.09.2025</td><td>€ 199,00</td><td><span class="plakette warn">offen</span></td></tr>
+      <tr><td>05.09.2025</td><td>RE-2025-017</td><td>Bürobedarf Mohr</td><td>19.09.2025</td><td>€ 89,50</td><td><span class="plakette ok">bezahlt</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+    </main>
+  </div>
+</body>
+</html>

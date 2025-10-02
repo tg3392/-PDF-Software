@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Belege hochladen – Rechnungen (Mockup)</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <aside class="seitenleiste" aria-label="Hauptnavigation">
+  <div class="logo">
+    <img src="assets/logo.svg" alt="Logo"/>
+    <div><strong>Rechnungen</strong></div>
+  </div>
+  <nav>
+    <a href="index.html" class="">Übersicht</a>
+    <a href="eingangsrechnungen.html" class="">Eingangsrechnungen</a>
+    <a href="ausgangsrechnungen.html" class="">Ausgangsrechnungen</a>
+    <a href="hochladen.html" class="aktiv">Belege hochladen</a>
+    <a href="einstellungen.html" class="">Einstellungen</a>
+  </nav>
+  <div style="margin-top:auto" class="hinweis">Dies sind statische Entwürfe zur Veranschaulichung.</div>
+</aside>
+  <div class="hülle">
+    <div class="kopfleiste">
+      <strong>Belege hochladen</strong>
+      <div class="reihe" style="flex:1; margin-left:12px">
+        <div class="suche"><input type="search" placeholder="Suchen …" aria-label="Suchen"/></div>
+        <a href="ausgangsrechnung_neu.html" class="knopf">Neue Ausgangsrechnung</a>
+      </div>
+    </div>
+    <main class="inhalt">
+      
+<section class="karte">
+  <h3 style="margin:0 0 10px 0">Belege hochladen</h3>
+  <div class="ablage" id="ablage" tabindex="0">
+    <p><strong>Dateien hierher ziehen</strong> oder klicken, um eine Datei auszuwählen.</p>
+    <div class="hinweis">Zulässig: PDF, JPG, PNG</div>
+  </div>
+  <div id="liste" class="hinweis" style="margin-top:10px">Noch keine Dateien.</div>
+</section>
+<script>
+const ablage = document.getElementById('ablage');
+['dragenter','dragover'].forEach(ev => ablage.addEventListener(ev, e=>{e.preventDefault(); ablage.classList.add('aktiv')}));
+['dragleave','drop'].forEach(ev => ablage.addEventListener(ev, e=>{e.preventDefault(); ablage.classList.remove('aktiv')}));
+ablage.addEventListener('click', () => alert('Dateiauswahl (Mockup)'));
+ablage.addEventListener('drop', (e) => {
+  const l = document.getElementById('liste');
+  const namen = [...e.dataTransfer.files].map(f => f.name).join(', ');
+  l.textContent = 'Hochgeladen: ' + (namen || '—');
+});
+</script>
+
+    </main>
+  </div>
+</body>
+</html>
