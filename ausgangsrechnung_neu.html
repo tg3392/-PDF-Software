@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Ausgangsrechnung erstellen – Rechnungen (Mockup)</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <aside class="seitenleiste" aria-label="Hauptnavigation">
+  <div class="logo">
+    <img src="assets/logo.svg" alt="Logo"/>
+    <div><strong>Rechnungen</strong></div>
+  </div>
+  <nav>
+    <a href="index.html" class="">Übersicht</a>
+    <a href="eingangsrechnungen.html" class="">Eingangsrechnungen</a>
+    <a href="ausgangsrechnungen.html" class="aktiv">Ausgangsrechnungen</a>
+    <a href="hochladen.html" class="">Belege hochladen</a>
+    <a href="einstellungen.html" class="">Einstellungen</a>
+  </nav>
+  <div style="margin-top:auto" class="hinweis">Dies sind statische Entwürfe zur Veranschaulichung.</div>
+</aside>
+  <div class="hülle">
+    <div class="kopfleiste">
+      <strong>Ausgangsrechnung erstellen</strong>
+      <div class="reihe" style="flex:1; margin-left:12px">
+        <div class="suche"><input type="search" placeholder="Suchen …" aria-label="Suchen"/></div>
+        <a href="ausgangsrechnung_neu.html" class="knopf">Neue Ausgangsrechnung</a>
+      </div>
+    </div>
+    <main class="inhalt">
+      
+<section class="karte formular">
+  <h3 style="margin:0 0 8px 0">Neue Ausgangsrechnung</h3>
+  <div class="gitter">
+    <label>Kunde
+      <input type="text" id="kunde" placeholder="z. B. Müller Consulting"/>
+    </label>
+    <label>Rechnungsnummer
+      <input type="text" id="nr" value="AR-2025-106"/>
+    </label>
+
+    <label>Rechnungsdatum
+      <input type="date" id="datum" value="2025-09-15"/>
+    </label>
+    <label>Fällig am
+      <input type="date" id="faellig" value="2025-09-29"/>
+    </label>
+
+    <label>Rechnungsadresse
+      <textarea id="adresse" rows="3" placeholder="Firma&#10;Straße Hausnummer&#10;PLZ Ort"></textarea>
+    </label>
+    <label>Bezahlstatus
+      <select id="status">
+        <option>offen</option>
+        <option>bezahlt</option>
+        <option>überfällig</option>
+      </select>
+    </label>
+  </div>
+
+  <h4>Leistungen/Positionen</h4>
+  <div class="gitter">
+    <label>Beschreibung
+      <input type="text" id="pos_text" value="Beratung und Konzept"/>
+    </label>
+    <label>Einheit
+      <input type="text" id="pos_einheit" value="Stunde"/>
+    </label>
+    <label>Menge
+      <input type="number" id="pos_menge" value="8" min="0" step="1"/>
+    </label>
+    <label>Einzelpreis (€)
+      <input type="number" id="pos_preis" value="120" min="0" step="0.01"/>
+    </label>
+    <label>Rabatt (€)
+      <input type="number" id="pos_rabatt" value="0" min="0" step="0.01"/>
+    </label>
+    <label>Steuersatz
+      <select id="steuer">
+        <option value="19">19&nbsp;% (Standard)</option>
+        <option value="7">7&nbsp;%</option>
+        <option value="0">0&nbsp;%</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="karte" style="display:grid; gap:8px">
+    <div class="reihe"><div style="flex:1">Zwischensumme</div><strong id="zwischensumme">€ 0,00</strong></div>
+    <div class="reihe"><div style="flex:1">Steuer</div><strong id="steuerbetrag">€ 0,00</strong></div>
+    <div class="reihe"><div style="flex:1">Gesamtbetrag</div><strong id="gesamt">€ 0,00</strong></div>
+  </div>
+
+  <div class="reihe" style="justify-content:space-between">
+    <div class="hinweis">Hinweis: Dies ist ein statisches Mockup mit Berechnung im Browser.</div>
+    <div class="reihe">
+      <a class="knopf flach" href="ausgangsrechnungen.html">Abbrechen</a>
+      <a class="knopf" href="ausgangsrechnung_vorschau.html">Rechnungsvorschau</a>
+    </div>
+  </div>
+</section>
+
+<script>
+function euro(n){ return n.toLocaleString('de-DE',{style:'currency', currency:'EUR'}); }
+function aktualisieren(){
+  const menge = parseFloat(document.getElementById('pos_menge').value||'0');
+  const preis = parseFloat(document.getElementById('pos_preis').value||'0');
+  const rabatt = parseFloat(document.getElementById('pos_rabatt').value||'0');
+  const st = parseFloat(document.getElementById('steuer').value||'19');
+  const netto = Math.max(menge*preis - rabatt, 0);
+  const steuer = +(netto * (st/100));
+  const brutto = netto + steuer;
+  document.getElementById('zwischensumme').textContent = euro(netto);
+  document.getElementById('steuerbetrag').textContent = euro(steuer);
+  document.getElementById('gesamt').textContent = euro(brutto);
+}
+['pos_menge','pos_preis','pos_rabatt','steuer'].forEach(id => document.getElementById(id).addEventListener('input', aktualisieren));
+aktualisieren();
+</script>
+
+    </main>
+  </div>
+</body>
+</html>
