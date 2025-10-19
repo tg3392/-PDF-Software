@@ -1,0 +1,30 @@
+Kurze Bedienungsanleitung zur Invoice App
+
+Diese Datei erklärt in einfachen Worten, wie die wichtigsten Bereiche der App funktionieren.
+
+1) Upload
+- Hier kannst du PDF-Rechnungen hochladen. Ziehe Dateien in den Bereich oder klicke auf "Upload" und wähle die Dateien aus.
+- Die App liest die Datei nicht wirklich lokal aus, sondern simuliert derzeit eine Erkennung. In einer echten Installation würde hier ein OCR-Service die Texte und Positionen aus der PDF extrahieren.
+- Technisch: In der Datei `src/pages/App.jsx` ist die Funktion `processInvoice(file)` zuständig. Dort würdest du den Upload an das OCR-Backend anschließen.
+
+2) Überprüfung (Review)
+- Nach dem Upload zeigt die "Überprüfung"-Ansicht die erkannten Rechnungen mit den wichtigsten Feldern (Rechnungsnummer, Datum, Lieferant, Gesamt).
+- Du kannst Felder manuell anpassen, wenn etwas falsch erkannt wurde. Dafür einfach das Feld bearbeiten.
+- Neben bestimmten Feldern gibt es eine "Feedback"-Schaltfläche. Damit kannst du einen Fehler melden und optional die richtige Korrektur angeben. Dieses Feedback kann später zum Verbessern der Erkennung genutzt werden.
+
+3) Lernen (Training)
+- Dieser Bereich ist für das Training der KI gedacht. Aktuell zeigt er nur einen Platzhalter mit Hinweisen.
+- In einem produktiven System würdest du hier geprüfte Rechnungen und Feedback nutzen, um das Extraktionsmodell zu verbessern.
+
+4) Export
+- Hier kannst du erkannte Rechnungsdaten herunterladen: als CSV (Tabulator getrennt) oder als JSON.
+- Außerdem kannst du alle gesammelten Feedback-Einträge als JSON oder XML exportieren, um sie z. B. zum Trainieren oder zur Analyse zu verwenden.
+
+5) Demo
+- Die Demo-Seite enthält den ursprünglichen Beispielcode und kleine Tests, mit denen du das Verhalten der App ansehen kannst.
+
+Wo ist die KI/WO ist die Datenbank?
+- KI (OCR/Extraktion): Das passiert außerhalb der UI in einem OCR-/NLP-Service. In der App ist der Hook-Punkt `processInvoice(file)` (in `src/pages/App.jsx`). Dort wird eine Datei an einen OCR-Endpunkt geschickt, dessen Antwort dann an einen Extraktor weitergereicht wird.
+- Datenbank: Das Speichern von Rechnungen und Feedback erfolgt im Backend. Übliche Endpunkte sind `POST /api/invoices` zum Speichern einer Rechnung und `POST /api/feedbacks` zum Speichern von Feedback. Nach dem Speichern aktualisiert das Frontend seinen lokalen Zustand (die angezeigten Rechnungen).
+
+Kurz und praktisch: Die App ist eine Oberfläche für Hochladen, Prüfen, Korrigieren und Exportieren von Rechnungsdaten. Die eigentliche Erkennung (KI) und Speicherung (DB) laufen idealerweise auf einem Server und sind über einfache API-Aufrufe angebunden.
