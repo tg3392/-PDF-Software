@@ -18,13 +18,16 @@ Diese Datei erklärt in einfachen Worten, wie die wichtigsten Bereiche der App f
 
 4) Export
 - Hier kannst du erkannte Rechnungsdaten herunterladen: als CSV (Tabulator getrennt) oder als JSON.
-- Außerdem kannst du alle gesammelten Feedback-Einträge als JSON oder XML exportieren, um sie z. B. zum Trainieren oder zur Analyse zu verwenden.
+- Außerdem kannst du alle gesammelten Feedback‑Einträge als JSON oder XML exportieren, um sie z. B. zum Trainieren oder zur Analyse zu verwenden.
 
-5) Demo
-- Die Demo-Seite enthält den ursprünglichen Beispielcode und kleine Tests, mit denen du das Verhalten der App ansehen kannst.
+Schnittstellen (Kurz, was das Frontend erwartet)
+- POST /api/ocr — Upload der PDF (multipart/form-data `file`) → Antwort `{ ocrId, ocrText, pages?, meta? }`.
+- POST /nlp/extract — Analyse des OCR‑Textes (JSON `{ requestId?, ocrId?, ocrText }`) → Antwort `{ requestId, status, prediction, confidences }`.
+- POST /nlp/feedback oder POST /api/feedbacks — Feedback/Training senden (JSON `{ originalPrediction, editedPrediction, userId? }`) → Antwort `{ saved: true, trainingId }`.
+- POST /api/invoices — finale, bestätigte Rechnung speichern → Antwort `{ invoiceId, saved: true }`.
 
-Wo ist die KI/WO ist die Datenbank?
-- KI (OCR/Extraktion): Das passiert außerhalb der UI in einem OCR-/NLP-Service. In der App ist der Hook-Punkt `processInvoice(file)` (in `src/pages/App.jsx`). Dort wird eine Datei an einen OCR-Endpunkt geschickt, dessen Antwort dann an einen Extraktor weitergereicht wird.
-- Datenbank: Das Speichern von Rechnungen und Feedback erfolgt im Backend. Übliche Endpunkte sind `POST /api/invoices` zum Speichern einer Rechnung und `POST /api/feedbacks` zum Speichern von Feedback. Nach dem Speichern aktualisiert das Frontend seinen lokalen Zustand (die angezeigten Rechnungen).
+Wo ist die KI / Wo ist die Datenbank?
+- KI (OCR/Extraktion): Das passiert außerhalb der UI in einem OCR-/NLP‑Service. In der App ist der Hook‑Punkt `processInvoice(file)` (in `src/pages/App.jsx`). Dort wird eine Datei an `/api/ocr` gesendet und das Ergebnis an `/nlp/extract` weitergereicht.
+- Datenbank: Das Speichern von Rechnungen und Feedback erfolgt im Backend. Aktuell schreibt das Test‑Backend die Daten in SQLite (`server/data.db`) über die Endpunkte `/api/invoices` und `/api/feedbacks`.
 
-Kurz und praktisch: Die App ist eine Oberfläche für Hochladen, Prüfen, Korrigieren und Exportieren von Rechnungsdaten. Die eigentliche Erkennung (KI) und Speicherung (DB) laufen idealerweise auf einem Server und sind über einfache API-Aufrufe angebunden.
+Kurz und praktisch: Die App ist eine Oberfläche für Hochladen, Prüfen, Korrigieren und Exportieren von Rechnungsdaten. Die eigentliche Erkennung (KI) und Speicherung (DB) laufen auf dem Backend und sind über die oben genannten Endpunkte angebunden.

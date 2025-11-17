@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Download, Settings, CheckCircle, AlertCircle, Eye } from 'lucide-react';
-import TestInvoiceApp from './TEST_SOFTWARE.jsx';
+// Demo/Test component removed — demo functionality disabled
 
 const InvoiceApp = () => {
   const [invoices, setInvoices] = useState([]);
@@ -291,16 +291,7 @@ const InvoiceApp = () => {
             <Download className="inline mr-2" size={20} />
             Export
           </button>
-          <button
-            onClick={() => setActiveTab('demo')}
-            className={`px-6 py-2 rounded-lg font-semibold transition ${
-              activeTab === 'demo'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white text-gray-700 border-2 border-gray-200'
-            }`}
-          >
-            Demo
-          </button>
+          {/* Demo tab removed */}
         </div>
 
         {/* Upload Tab */}
@@ -548,13 +539,7 @@ const InvoiceApp = () => {
           </div>
         )}
 
-        {/* Demo: imported TEST_SOFTWARE component */}
-        {activeTab === 'demo' && (
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Demo Komponente</h3>
-            <TestInvoiceApp />
-          </div>
-        )}
+        {/* Demo removed: no demo UI rendered */}
 
         {/* Feedback Modal */}
         {showFeedbackModal && (
