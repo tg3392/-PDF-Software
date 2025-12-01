@@ -1,6 +1,87 @@
 import React, { useState } from 'react';
+import { ocrUpload, nlpExtract, sendNlpFeedback } from '../lib/api';
+
+// Zentrales Feldschema, das zur Darstellung des dynamischen Formulars verwendet wird
+const FIELD_SCHEMA = {
+  "INVOICE_NO": { type: 'text', label: 'Rechnungsnummer' },
+  "INVOICE_DATE": { type: 'date', label: 'Rechnungsdatum' },
+  "SERVICE_DATE": { type: 'date', label: 'Leistungsdatum' },
+  "SUPPLIER_NAME": { type: 'text', label: 'Lieferant Name' },
+  "SUPPLIER_ADDRESS_STREET": { type: 'text', label: 'Lieferant Straße' },
+  "SUPPLIER_ADDRESS_CITY": { type: 'text', label: 'Lieferant Ort' },
+  "CUSTOMER_NAME": { type: 'text', label: 'Kunde Name' },
+  "CUSTOMER_ADDRESS_STREET": { type: 'text', label: 'Kunde Straße' },
+  "CUSTOMER_ADDRESS_CITY": { type: 'text', label: 'Kunde Ort' },
+  "VAT_ID": { type: 'text', label: 'USt‑Id' },
+  "TAX_ID": { type: 'text', label: 'Steuernummer' },
+  "PAYMENT_TERMS": { type: 'text', label: 'Zahlungsbedingungen' },
+  "TOTAL_GROSS": { type: 'number', label: 'Gesamt (Brutto)' },
+  "IBAN": { type: 'text', label: 'IBAN' },
+  "BIC": { type: 'text', label: 'BIC' },
+  "BANK_NAME": { type: 'text', label: 'Bankname' }
+};
+
+// Helfer: Aktualisiert ein konkretes NLP-Feld für eine Rechnung
+const updateNlpField = (invoices, setInvoices, invoiceId, fieldName, value) => {
+  setInvoices(invoices.map(inv => {
+    if (inv.id !== invoiceId) return inv;
+    const n = { ...(inv.nlp || {} ) };
+    const fields = (n.fields || []).map(f => f.name === fieldName ? { ...f, value } : f);
+    // if field not present, add it
+    if (!fields.find(f => f.name === fieldName)) fields.push({ name: fieldName, value, confidence: 1 });
+    n.fields = fields;
+    // also update top-level invoice properties for a better UX (keep in sync)
+    const updated = { ...inv, nlp: n };
+    try {
+      switch (fieldName) {
+        case 'SUPPLIER_NAME': updated.vendor = value; break;
+        case 'SUPPLIER_ADDRESS_STREET': updated.vendorStreet = value; break;
+        case 'SUPPLIER_ADDRESS_CITY': updated.vendorCity = value; break;
+        case 'IBAN': updated.iban = value; break;
+        case 'BIC': updated.bic = value; break;
+        case 'INVOICE_DATE': updated.date = value; break;
+        case 'INVOICE_NO': updated.invoiceNumber = value; break;
+        case 'TOTAL_GROSS': updated.totalAmount = value; break;
+        case 'TAX_ID': case 'VAT_ID': updated.taxId = value; break;
+        default: break;
+      }
+    } catch (e) {}
+    return updated;
+  }));
+};
+
+// Helfer: Baue Korrekturen zusammen und sende sie an `/nlp/feedback`
+const submitNlpCorrections = async (invoice, setSendingFeedbackIds, setInvoices) => {
+  if (!invoice || !invoice.nlp) return;
+  const requestId = invoice.nlp.requestId;
+  const original = invoice.nlp.originalFields || [];
+  const current = invoice.nlp.fields || [];
+  const corrections = [];
+  current.forEach(c => {
+    const orig = original.find(o => o.name === c.name);
+    const origVal = orig ? (orig.value || '') : '';
+    const curVal = c.value || '';
+    if (String(origVal) !== String(curVal)) corrections.push({ name: c.name, value: curVal });
+  });
+
+  if (corrections.length === 0) return { ok: true, message: 'no changes' };
+
+  try {
+    setSendingFeedbackIds(ids => [...ids, invoice.id]);
+    const resp = await sendNlpFeedback({ requestId, corrections });
+    // optimistic: attach corrections to invoice
+    setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, corrections: { ...(i.corrections||{}), nlpCorrections: corrections } } : i));
+    return resp;
+  } catch (e) {
+    console.error('submitNlpCorrections error', e);
+    throw e;
+  } finally {
+    setSendingFeedbackIds(ids => ids.filter(x => x !== invoice.id));
+  }
+};
 import { Upload, Download, Settings, CheckCircle, AlertCircle, Eye } from 'lucide-react';
-// Demo component removed — demo functionality disabled
+import FeedbackModal from '../components/FeedbackModal';
+// Demo-Komponente entfernt — Demo-Funktionalität deaktiviert
 
 const InvoiceApp = () => {
   const [invoices, setInvoices] = useState([]);
@@ -9,6 +90,7 @@ const InvoiceApp = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [trainingData, setTrainingData] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [company, setCompany] = useState(null);
   const [editingCompany, setEditingCompany] = useState(false);
   const [companyName, setCompanyName] = useState('');
@@ -17,7 +99,7 @@ const InvoiceApp = () => {
   const [companyCity, setCompanyCity] = useState('');
   const [companyVat, setCompanyVat] = useState('');
 
-  // load company profile
+  // Lade Firmenprofil
   React.useEffect(() => {
     const load = async () => {
       try {
@@ -31,7 +113,7 @@ const InvoiceApp = () => {
     load();
   }, []);
 
-  // when entering edit mode, seed form fields
+  // Beim Wechsel in den Bearbeitungsmodus: Formularfelder vorbefüllen
   React.useEffect(() => {
     if (editingCompany && company) {
       setCompanyName(company.name || '');
@@ -59,78 +141,66 @@ const InvoiceApp = () => {
     }
   };
 
-  // OCR + NLP processing: upload file to backend and fetch prediction
+  // OCR- und NLP-Verarbeitung: Datei an Backend hochladen und Vorhersage abfragen
   const processInvoice = async (file) => {
     try {
-      // Upload file to backend OCR endpoint
+      setIsUploading(true);
+      // Datei an OCR-Endpunkt im Backend hochladen
       const form = new FormData();
       form.append('file', file);
+      const ocrJson = await ocrUpload(form);
+      const ocrText = (ocrJson && ocrJson.ocrText) ? ocrJson.ocrText : '';
 
-      const ocrResp = await fetch('/api/ocr', { method: 'POST', body: form });
-      const ocrJson = await ocrResp.json();
+      // NLP-Extraktion mit strukturierter `ocrText`-Nutzlast aufrufen
+      const requestId = `req-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+      const ocrPayload = {
+        requestId,
+        ocrText: {
+          metadata: { filename: file.name },
+          pages: [ { page_number: 1, full_text: typeof ocrText === 'string' ? ocrText : (ocrText && ocrText.pages && ocrText.pages[0] && ocrText.pages[0].full_text) || '' } ]
+        }
+      };
+      const extractJson = await nlpExtract(ocrPayload);
 
-      const ocrText = ocrJson && ocrJson.ocrText ? ocrJson.ocrText : '';
+      // Verarbeite die Antwort des Extractors
+      const ext = extractJson || {};
+      const data = ext.data || {};
+      const fields = Array.isArray(data.fields) ? data.fields : [];
 
-      // Call NLP extract endpoint with OCR text
-      const extractResp = await fetch('/nlp/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ocrText })
-      });
-      const extractJson = await extractResp.json();
-
-      const pred = (extractJson && extractJson.prediction) || {};
-
-      const invoice = {
+      // Das zentrale Schema wird im Client verwendet; speichere die Antwort im Rechnungszustand
+      const item = {
         id: Date.now(),
         fileName: file.name,
-        uploadDate: new Date().toLocaleDateString('de-DE'),
-        type: pred.classification || 'Unbestimmt',
-        invoiceNumber: pred.extractedData && pred.extractedData.invoiceNumber ? pred.extractedData.invoiceNumber : (ocrJson.savedFile || `RG-${Math.floor(Math.random() * 10000)}`),
-        date: pred.extractedData && pred.extractedData.date ? pred.extractedData.date : new Date().toLocaleDateString('de-DE'),
-        // vendor/recipient: backend returns structured objects { name, street, zip_code, city, raw }
-        vendor: (pred.extractedData && pred.extractedData.vendor && (pred.extractedData.vendor.name || pred.extractedData.vendor.raw)) || 'unbekannt',
-        recipient: (pred.extractedData && pred.extractedData.recipient && (pred.extractedData.recipient.name || pred.extractedData.recipient.raw)) || undefined,
-        taxId: pred.extractedData && pred.extractedData.taxId ? pred.extractedData.taxId : undefined,
-        items: pred.extractedData && pred.extractedData.items ? pred.extractedData.items : [],
-        taxBreakdown: pred.extractedData && pred.extractedData.taxBreakdown ? pred.extractedData.taxBreakdown : [],
-        vatAmount: pred.extractedData && pred.extractedData.vatAmount ? pred.extractedData.vatAmount : undefined,
-        totalAmount: pred.extractedData && pred.extractedData.grossTotal ? pred.extractedData.grossTotal : (pred.extractedData && pred.extractedData.total ? pred.extractedData.total : '0.00'),
-        currency: pred.extractedData && pred.extractedData.currency ? pred.extractedData.currency : 'EUR',
-        taxAmount: '0.00',
-        description: 'Automatisch erfasst',
-        confidence: extractJson.prediction && extractJson.prediction.confidence ? (extractJson.prediction.confidence*100).toFixed(0) : '80',
+        type: data.type || 'UNKNOWN',
+        invoiceNumber: fields.find(f => f.name === 'INVOICE_NO')?.value || `RG-${Math.floor(Math.random()*10000)}`,
+        date: fields.find(f => f.name === 'INVOICE_DATE')?.value || new Date().toISOString().slice(0,10),
+        vendor: fields.find(f => f.name === 'SUPPLIER_NAME')?.value || 'unknown',
+        taxId: fields.find(f => f.name === 'TAX_ID' || f.name === 'VAT_ID')?.value || '',
+        recipient: fields.find(f => f.name === 'RECIPIENT_NAME')?.value || '',
+        vatAmount: fields.find(f => f.name === 'VAT_AMOUNT')?.value || '',
+        totalAmount: fields.find(f => f.name === 'TOTAL_GROSS')?.value || '0.00',
+        vendorStreet: fields.find(f => f.name === 'SUPPLIER_ADDRESS_STREET')?.value || '',
+        vendorCity: fields.find(f => f.name === 'SUPPLIER_ADDRESS_CITY')?.value || '',
+        iban: fields.find(f => f.name === 'IBAN')?.value || '',
+        bic: fields.find(f => f.name === 'BIC')?.value || '',
+        currency: 'EUR',
+        confidence: 0.8,
         verified: false,
         corrections: {},
-        // keep original prediction for feedback
-        prediction: pred,
-        ocrTextSample: (ocrText || '').slice(0,500)
+        nlp: {
+          requestId: ext.requestId || requestId,
+          type: data.type || 'UNKNOWN',
+          fields: fields.map(f => ({ name: f.name, value: f.value, confidence: f.confidence })),
+          originalFields: fields.map(f => ({ name: f.name, value: f.value }))
+        }
       };
 
-      setInvoices(prev => [...prev, invoice]);
-      setTrainingData(prev => [...prev, invoice]);
+      setInvoices(prev => [...prev, item]);
+      setTrainingData(prev => [...prev, item]);
     } catch (err) {
       console.error('processInvoice error', err);
-      // fallback to previous simulation if backend fails
-      const simulatedData = {
-        id: Date.now(),
-        fileName: file.name,
-        uploadDate: new Date().toLocaleDateString('de-DE'),
-        type: Math.random() > 0.5 ? 'Ausgangsrechnung' : 'Eingangsrechnung',
-        invoiceNumber: `RG-${Math.floor(Math.random() * 10000)}`,
-        date: new Date().toLocaleDateString('de-DE'),
-        vendor: ['Musterfirma GmbH', 'ABC Lieferant', 'XYZ Services', 'Tech Solutions'][Math.floor(Math.random() * 4)],
-        totalAmount: (Math.random() * 5000 + 100).toFixed(2),
-        currency: 'EUR',
-        taxAmount: (Math.random() * 1000).toFixed(2),
-        description: 'Automatisch erfasst (Fallback)',
-        items: [],
-        confidence: (Math.random() * 30 + 70).toFixed(1),
-        verified: false,
-        corrections: {}
-      };
-      setInvoices(prev => [...prev, simulatedData]);
-      setTrainingData(prev => [...prev, simulatedData]);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -151,22 +221,33 @@ const InvoiceApp = () => {
     ));
   };
 
-  // send classification override as feedback to backend
+  // Klassifikations-Override als Feedback an das Backend senden (optimistische Aktualisierung + Rücksetz-Logik)
   const sendClassificationFeedback = async (invoice, newClassification) => {
     try {
       const original = invoice.prediction || { extractedData: { invoiceNumber: invoice.invoiceNumber, date: invoice.date, total: invoice.totalAmount }, classification: invoice.type };
       const edited = { ...(original || {}), classification: newClassification };
 
-      // optimistically update prediction on frontend
+      // optimistische Aktualisierung mit Rücksetz-Logik
       setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, type: newClassification, prediction: edited } : i));
+      setSendingFeedbackIds(ids => [...ids, invoice.id]);
 
-      await fetch('/nlp/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: null, invoiceId: invoice.id, originalPrediction: original, editedPrediction: edited, editorId: 'user-local' })
-      });
+      try {
+        const resp = await fetch('/nlp/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: null, invoiceId: invoice.id, originalPrediction: original, editedPrediction: edited, editorId: 'user-local' })
+        });
+        if (!resp.ok) throw new Error('Feedback send failed');
+      } catch (e) {
+        // rollback
+        console.error('sendClassificationFeedback error', e);
+        setInvoices(prev => prev.map(i => i.id === invoice.id ? { ...i, type: invoice.type, prediction: original } : i));
+        alert('Feedback konnte nicht gesendet werden. Änderung zurückgesetzt.');
+      } finally {
+        setSendingFeedbackIds(ids => ids.filter(x => x !== invoice.id));
+      }
     } catch (e) {
-      console.error('sendClassificationFeedback error', e);
+      console.error('sendClassificationFeedback outer error', e);
     }
   };
 
@@ -176,54 +257,162 @@ const InvoiceApp = () => {
     ));
   };
 
+  // Erzeuge ein Payload aus der Rechnung unter Verwendung der aktuellen NLP-Felder (Edits aus dem NLP-Formular haben Vorrang)
+  const buildInvoicePayload = (inv) => {
+    const nlpMap = (inv.nlp && Array.isArray(inv.nlp.fields)) ? Object.fromEntries(inv.nlp.fields.map(f => [f.name, f.value])) : {};
+    const vendorObj = {
+      name: nlpMap['SUPPLIER_NAME'] || inv.vendor || '',
+      street: nlpMap['SUPPLIER_ADDRESS_STREET'] || inv.vendorStreet || '',
+      zip_code: (nlpMap['SUPPLIER_ADDRESS_CITY'] || inv.vendorCity || '').split(' ')[0] || '',
+      city: (nlpMap['SUPPLIER_ADDRESS_CITY'] || inv.vendorCity || '').split(' ').slice(1).join(' ') || '',
+      iban: nlpMap['IBAN'] || inv.iban || '',
+      bic: nlpMap['BIC'] || inv.bic || ''
+    };
+
+    return {
+      vendor: vendorObj,
+      invoiceNumber: nlpMap['INVOICE_NO'] || inv.invoiceNumber,
+      date: nlpMap['INVOICE_DATE'] || inv.date,
+      total: nlpMap['TOTAL_GROSS'] || inv.totalAmount,
+      currency: inv.currency || 'EUR',
+      raw: { nlp: inv.nlp || null, corrections: inv.corrections || {} }
+    };
+  };
+
+  const saveInvoice = async (inv) => {
+    try {
+      const payload = buildInvoicePayload(inv);
+      const resp = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await resp.json();
+      if (j && j.ok) {
+        // annotate saved id on invoice in local state
+        setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, savedId: j.id || j.invoiceId || null } : i));
+        alert('Rechnung gespeichert');
+      } else {
+        alert('Speichern fehlgeschlagen');
+      }
+    } catch (e) {
+      console.error('saveInvoice error', e);
+      alert('Fehler beim Speichern');
+    }
+  };
+
   const exportToExcel = () => {
-    const headers = ['Rechnungsnummer', 'Typ', 'Datum', 'Lieferant', 'Gesamtbetrag', 'Währung', 'Steuerbetrag', 'Vertrauenswert', 'Status'];
-    const rows = invoices.map(inv => [
-      inv.invoiceNumber,
-      inv.type,
-      inv.date,
-      inv.vendor,
-      inv.totalAmount,
-      inv.currency,
-      inv.taxAmount,
-      inv.confidence + '%',
-      inv.verified ? 'Verifiziert' : 'Ungeprüft'
-    ]);
+    // Verbesserter CSV-Export: semikolon-Separator, UTF-8 BOM, formatierte Zahlen/Daten, freundliche Header
+    const delimiter = ';';
+    const headers = ['Datei', 'Rechnungsnummer', 'Typ', 'Datum', 'Lieferant', 'Straße', 'Ort', 'IBAN', 'BIC', 'Gesamtbetrag', 'Währung', 'USt/Betrag', 'Vertrauenswert', 'Status', 'Beschreibung'];
 
-    const csvContent = [
-      headers.join('\t'),
-      ...rows.map(row => row.join('\t'))
-    ].join('\n');
+    const fmtNumber = (v) => {
+      if (v === undefined || v === null || v === '') return '';
+      const n = Number(String(v).replace(',', '.'));
+      if (Number.isNaN(n)) return String(v);
+      return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+    };
 
-    const blob = new Blob([csvContent], { type: 'text/plain' });
+    const fmtDate = (d) => {
+      if (!d) return '';
+      // accept ISO or localized strings; try to create Date
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const day = String(dt.getDate()).padStart(2,'0');
+      const month = String(dt.getMonth()+1).padStart(2,'0');
+      const year = dt.getFullYear();
+      return `${day}.${month}.${year}`;
+    };
+
+    // build rows with formatted values
+    const rows = invoices.map(inv => {
+      const nlpMap = (inv.nlp && Array.isArray(inv.nlp.fields)) ? Object.fromEntries(inv.nlp.fields.map(f => [f.name, f.value])) : {};
+      const invoiceNo = nlpMap['INVOICE_NO'] || inv.invoiceNumber || '';
+      const date = fmtDate(nlpMap['INVOICE_DATE'] || inv.date || '');
+      const vendorName = nlpMap['SUPPLIER_NAME'] || inv.vendor || '';
+      const vendorStreet = nlpMap['SUPPLIER_ADDRESS_STREET'] || inv.vendorStreet || '';
+      const vendorCity = nlpMap['SUPPLIER_ADDRESS_CITY'] || inv.vendorCity || '';
+      const iban = nlpMap['IBAN'] || inv.iban || '';
+      const bic = nlpMap['BIC'] || inv.bic || '';
+      const total = fmtNumber(nlpMap['TOTAL_GROSS'] || inv.totalAmount || '');
+      const tax = fmtNumber(inv.taxAmount || '');
+      const confidence = inv.confidence ? Number(inv.confidence).toFixed(2) : '';
+      const cols = [
+        inv.fileName || '',
+        invoiceNo,
+        inv.type || '',
+        date,
+        vendorName,
+        vendorStreet,
+        vendorCity,
+        iban,
+        bic,
+        total,
+        inv.currency || 'EUR',
+        tax,
+        confidence,
+        (inv.verified ? 'Verifiziert' : 'Ungeprüft'),
+        inv.description || ''
+      ];
+      // quote and escape
+      return cols.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(delimiter);
+    });
+
+    // optional summary row: Anzahl Rechnungen und Summe
+    const insgesamt = invoices.reduce((s, inv) => s + (Number(String((inv.nlp && Array.isArray(inv.nlp.fields) ? (Object.fromEntries(inv.nlp.fields.map(f=>[f.name,f.value]))['TOTAL_GROSS']) : inv.totalAmount) || '0').replace(',','.')) || 0), 0);
+    const summaryRow = ['','', '', '', '','', '','', '', new Intl.NumberFormat('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2}).format(insgesamt), '', '', '', '', ''];
+
+    const BOM = '\uFEFF';
+    const csvLines = [headers.map(h => '"' + h + '"').join(delimiter), ...rows, '""' + delimiter + '""' + delimiter + '"Gesamt"' + delimiter + '""' + delimiter + '""' + delimiter + '""' + delimiter + summaryRow.join(delimiter)];
+    const csvContent = BOM + csvLines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `rechnungen_export_${Date.now()}.csv`;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   const exportFullData = () => {
-    const data = invoices.map(inv => ({
-      rechnungsnummer: inv.invoiceNumber,
-      typ: inv.type,
-      datum: inv.date,
-      lieferant: inv.vendor,
-      gesamtbetrag: inv.totalAmount,
-      currency: inv.currency,
-      steuerbetrag: inv.taxAmount,
-      beschreibung: inv.description,
-      vertrauenswert: inv.confidence,
-      verifiziert: inv.verified,
-      artikel: inv.items
-    }));
+    // Export full internal invoice representation including NLP payload for training/backup
+    const data = invoices.map(inv => {
+      const nlpMap = (inv.nlp && Array.isArray(inv.nlp.fields)) ? Object.fromEntries(inv.nlp.fields.map(f => [f.name, f.value])) : {};
+      const vendorObj = {
+        name: nlpMap['SUPPLIER_NAME'] || inv.vendor || '',
+        street: nlpMap['SUPPLIER_ADDRESS_STREET'] || inv.vendorStreet || '',
+        city: nlpMap['SUPPLIER_ADDRESS_CITY'] || inv.vendorCity || '',
+        iban: nlpMap['IBAN'] || inv.iban || '',
+        bic: nlpMap['BIC'] || inv.bic || ''
+      };
+      return {
+        id: inv.id,
+        fileName: inv.fileName,
+        type: inv.type,
+        invoiceNumber: nlpMap['INVOICE_NO'] || inv.invoiceNumber,
+        date: nlpMap['INVOICE_DATE'] || inv.date,
+        vendor: vendorObj,
+        totalAmount: nlpMap['TOTAL_GROSS'] || inv.totalAmount,
+        currency: inv.currency || 'EUR',
+        taxAmount: inv.taxAmount,
+        description: inv.description,
+        items: inv.items || [],
+        confidence: inv.confidence,
+        verified: inv.verified,
+        corrections: inv.corrections || {},
+        nlp: inv.nlp || null,
+        raw: inv.raw || null
+      };
+    });
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const jsonStr = JSON.stringify({ exportedAt: new Date().toISOString(), invoices: data }, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rechnungen_vollständig_${Date.now()}.json`;
+    a.download = `rechnungen_vollstaendig_${Date.now()}.json`;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   // Feedback (error reporting) state & helpers
@@ -237,6 +426,7 @@ const InvoiceApp = () => {
   const [fbBBox, setFbBBox] = useState({ x: '', y: '', width: '', height: '' });
   const [fbErrorType, setFbErrorType] = useState('ocr'); // 'ocr' or 'nlp'
   const [fbFormat, setFbFormat] = useState('json'); // 'json' or 'xml'
+  const [sendingFeedbackIds, setSendingFeedbackIds] = useState([]);
 
   const openFeedback = (invoiceId, field) => {
     const inv = invoices.find(i => i.id === invoiceId);
@@ -276,28 +466,52 @@ const InvoiceApp = () => {
 
     // prepare payload and trigger download in chosen format
     if (fbFormat === 'json') {
-      const blob = new Blob([JSON.stringify(feedback, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(feedback, null, 2)], { type: 'application/json;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `feedback_${feedback.id}.json`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } else {
       // simple XML serialization
-      const xml = `<?xml version="1.0" encoding="utf-8"?>\n<feedback>\n  <id>${feedback.id}</id>\n  <invoiceId>${feedback.invoiceId}</invoiceId>\n  <field>${feedback.field}</field>\n  <detectedText>${escapeXml(feedback.detectedText)}</detectedText>\n  <correctText>${escapeXml(feedback.correctText)}</correctText>\n  <page>${feedback.page}</page>\n  <bbox>\n    <x>${feedback.bbox.x}</x>\n    <y>${feedback.bbox.y}</y>\n    <width>${feedback.bbox.width}</width>\n    <height>${feedback.bbox.height}</height>\n  </bbox>\n  <errorType>${feedback.errorType}</errorType>\n  <timestamp>${feedback.timestamp}</timestamp>\n</feedback>`;
-      const blob = new Blob([xml], { type: 'application/xml' });
+      const xmlParts = [];
+      xmlParts.push('<?xml version="1.0" encoding="utf-8"?>');
+      xmlParts.push('<feedback>');
+      xmlParts.push(`  <id>${feedback.id}</id>`);
+      xmlParts.push(`  <invoiceId>${escapeXml(feedback.invoiceId)}</invoiceId>`);
+      xmlParts.push(`  <field>${escapeXml(feedback.field)}</field>`);
+      xmlParts.push(`  <detectedText>${escapeXml(feedback.detectedText)}</detectedText>`);
+      xmlParts.push(`  <correctText>${escapeXml(feedback.correctText)}</correctText>`);
+      xmlParts.push(`  <page>${escapeXml(feedback.page)}</page>`);
+      xmlParts.push('  <bbox>');
+      xmlParts.push(`    <x>${escapeXml(feedback.bbox.x)}</x>`);
+      xmlParts.push(`    <y>${escapeXml(feedback.bbox.y)}</y>`);
+      xmlParts.push(`    <width>${escapeXml(feedback.bbox.width)}</width>`);
+      xmlParts.push(`    <height>${escapeXml(feedback.bbox.height)}</height>`);
+      xmlParts.push('  </bbox>');
+      xmlParts.push(`  <errorType>${escapeXml(feedback.errorType)}</errorType>`);
+      xmlParts.push(`  <timestamp>${escapeXml(feedback.timestamp)}</timestamp>`);
+      xmlParts.push('</feedback>');
+      const xml = xmlParts.join('\n');
+      const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `feedback_${feedback.id}.xml`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     }
 
     setShowFeedbackModal(false);
   };
 
   const escapeXml = (unsafe) => {
-    if (!unsafe) return '';
+    if (unsafe === undefined || unsafe === null) return '';
     return String(unsafe).replace(/[<>&'\"]/g, function (c) {
       switch (c) {
         case '<': return '&lt;';
@@ -305,45 +519,55 @@ const InvoiceApp = () => {
         case '&': return '&amp;';
         case "'": return '&apos;';
         case '"': return '&quot;';
+        default: return '';
       }
     });
   };
 
   const exportAllFeedbacks = (format = 'json') => {
     if (format === 'json') {
-      const blob = new Blob([JSON.stringify(feedbacks, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(feedbacks, null, 2)], { type: 'application/json;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `all_feedbacks_${Date.now()}.json`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     } else {
-      let xml = '<?xml version="1.0" encoding="utf-8"?>\n<feedbacks>\n';
+      const parts = [];
+      parts.push('<?xml version="1.0" encoding="utf-8"?>');
+      parts.push('<feedbacks>');
       feedbacks.forEach(fb => {
-        xml += '  <feedback>\n';
-        xml += `    <id>${fb.id}</id>\n`;
-        xml += `    <invoiceId>${fb.invoiceId}</invoiceId>\n`;
-        xml += `    <field>${fb.field}</field>\n`;
-        xml += `    <detectedText>${escapeXml(fb.detectedText)}</detectedText>\n`;
-        xml += `    <correctText>${escapeXml(fb.correctText)}</correctText>\n`;
-        xml += `    <page>${fb.page}</page>\n`;
-        xml += '    <bbox>\n';
-        xml += `      <x>${fb.bbox.x}</x>\n`;
-        xml += `      <y>${fb.bbox.y}</y>\n`;
-        xml += `      <width>${fb.bbox.width}</width>\n`;
-        xml += `      <height>${fb.bbox.height}</height>\n`;
-        xml += '    </bbox>\n';
-        xml += `    <errorType>${fb.errorType}</errorType>\n`;
-        xml += `    <timestamp>${fb.timestamp}</timestamp>\n`;
-        xml += '  </feedback>\n';
+        parts.push('  <feedback>');
+        parts.push(`    <id>${escapeXml(fb.id)}</id>`);
+        parts.push(`    <invoiceId>${escapeXml(fb.invoiceId)}</invoiceId>`);
+        parts.push(`    <field>${escapeXml(fb.field)}</field>`);
+        parts.push(`    <detectedText>${escapeXml(fb.detectedText)}</detectedText>`);
+        parts.push(`    <correctText>${escapeXml(fb.correctText)}</correctText>`);
+        parts.push(`    <page>${escapeXml(fb.page)}</page>`);
+        parts.push('    <bbox>');
+        parts.push(`      <x>${escapeXml(fb.bbox.x)}</x>`);
+        parts.push(`      <y>${escapeXml(fb.bbox.y)}</y>`);
+        parts.push(`      <width>${escapeXml(fb.bbox.width)}</width>`);
+        parts.push(`      <height>${escapeXml(fb.bbox.height)}</height>`);
+        parts.push('    </bbox>');
+        parts.push(`    <errorType>${escapeXml(fb.errorType)}</errorType>`);
+        parts.push(`    <timestamp>${escapeXml(fb.timestamp)}</timestamp>`);
+        parts.push('  </feedback>');
       });
-      xml += '</feedbacks>';
-      const blob = new Blob([xml], { type: 'application/xml' });
+      parts.push('</feedbacks>');
+      const xml = parts.join('\n');
+      const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `all_feedbacks_${Date.now()}.xml`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
     }
   };
 
@@ -426,7 +650,7 @@ const InvoiceApp = () => {
             <Download className="inline mr-2" size={20} />
             Export
           </button>
-          {/* Demo tab removed */}
+          {/* Demo-Registerkarte entfernt */}
         </div>
 
         {/* Upload Tab */}
@@ -542,6 +766,37 @@ const InvoiceApp = () => {
                     </div>
                     {/* additional extracted fields */}
                     <div className="mt-4 border-t pt-4">
+                      {/* Dynamic NLP fields form based on central schema */}
+                      {invoice.nlp && (
+                        <div className="mb-4">
+                          <div className="text-sm font-semibold text-gray-700 mb-2">Erkannte Felder (NLP)</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {Object.keys(FIELD_SCHEMA).map((key) => {
+                              const schema = FIELD_SCHEMA[key];
+                              const field = (invoice.nlp.fields || []).find(f => f.name === key);
+                              const value = field ? (field.value || '') : '';
+                              return (
+                                <div key={key}>
+                                  <label className="block text-sm font-semibold text-gray-700 mb-1">{schema.label}</label>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type={schema.type === 'date' ? 'date' : (schema.type === 'number' ? 'number' : 'text')}
+                                      value={value}
+                                      onChange={(e) => updateNlpField(invoices, setInvoices, invoice.id, key, e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded"
+                                    />
+                                    <button onClick={() => openFeedback(invoice.id, key)} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <button onClick={async () => { try { await submitNlpCorrections(invoice, setSendingFeedbackIds, setInvoices); alert('Korrekturen gesendet'); } catch(e){ alert('Fehler beim Senden'); } }} className="px-4 py-2 bg-indigo-600 text-white rounded">Korrekturen speichern</button>
+                            <button onClick={() => saveInvoice(invoice)} className="px-4 py-2 bg-green-600 text-white rounded">Speichern</button>
+                          </div>
+                        </div>
+                      )}
                       {invoice.recipient && (
                         <div className="mb-2">
                           <div className="text-xs text-gray-500">Leistungsempfänger</div>
@@ -616,38 +871,27 @@ const InvoiceApp = () => {
           </div>
         )}
 
-        {/* Demo removed: no demo UI rendered */}
+        {/* Demo entfernt: kein Demo-UI wird angezeigt */}
 
         {/* Feedback Modal */}
-        {showFeedbackModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-semibold mb-4">Feedback</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-semibold">Feld</label>
-                  <div className="text-gray-700">{fbField}</div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold">Erkannter Text</label>
-                  <input value={fbDetectedText} onChange={(e)=> setFbDetectedText(e.target.value)} className="w-full px-3 py-2 border rounded" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold">Korrektur</label>
-                  <input value={fbCorrectText} onChange={(e)=> setFbCorrectText(e.target.value)} className="w-full px-3 py-2 border rounded" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setFbFormat('json')} className={`px-3 py-2 rounded ${fbFormat==='json' ? 'bg-indigo-600 text-white' : 'bg-gray-100'}`}>JSON</button>
-                  <button onClick={() => setFbFormat('xml')} className={`px-3 py-2 rounded ${fbFormat==='xml' ? 'bg-indigo-600 text-white' : 'bg-gray-100'}`}>XML</button>
-                </div>
-                <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setShowFeedbackModal(false)} className="px-4 py-2 bg-gray-200 rounded">Abbrechen</button>
-                  <button onClick={submitFeedback} className="px-4 py-2 bg-indigo-600 text-white rounded">Senden</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <FeedbackModal
+          show={showFeedbackModal}
+          fbField={fbField}
+          fbDetectedText={fbDetectedText}
+          setFbDetectedText={setFbDetectedText}
+          fbCorrectText={fbCorrectText}
+          setFbCorrectText={setFbCorrectText}
+          fbPage={fbPage}
+          setFbPage={setFbPage}
+          fbBBox={fbBBox}
+          setFbBBox={setFbBBox}
+          fbErrorType={fbErrorType}
+          setFbErrorType={setFbErrorType}
+          fbFormat={fbFormat}
+          setFbFormat={setFbFormat}
+          onCancel={() => setShowFeedbackModal(false)}
+          onSubmit={submitFeedback}
+        />
 
       </div>
     </div>
