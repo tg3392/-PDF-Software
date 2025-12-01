@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./invoice-app:/app:cached
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./invoice-app/server
+      dockerfile: Dockerfile
+    volumes:
+      - ./invoice-app/server:/app:cached
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install && node index.js"
+
+  ocr:
+    build:
+      context: ./invoice-app/ocr
+      dockerfile: Dockerfile
+    volumes:
+      - ./invoice-app/server:/ocr:cached
+      - ./invoice-app/server/uploads:/ocr/uploads
+    ports:
+      - "8003:8003"
+    command: uvicorn ocr_fastapi_single:app --host 0.0.0.0 --port 8003 --reload
