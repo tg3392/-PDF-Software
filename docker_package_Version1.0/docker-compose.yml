@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./invoice-app
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80" # expose nginx on 5173 to avoid conflicts
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./invoice-app/server
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./invoice-app/server/uploads:/app/uploads
+    restart: unless-stopped
+
+  ocr:
+    build:
+      context: ./invoice-app/ocr
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    restart: unless-stopped
+
+# Optional: networks and volumes can be expanded as needed
