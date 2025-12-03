@@ -1,0 +1,34 @@
+# Node
+node_modules/
+**/node_modules/
+
+# Python
+*.pyc
+__pycache__/
+
+# Databases
+*.db
+invoice-app/server/data.db
+
+# Uploads / runtime files
+invoice-app/server/uploads/
+
+# Bundles / archives
+*.zip
+
+# Env
+.env
+.env.*
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Build outputs
+/dist
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

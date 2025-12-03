@@ -1,6 +1,21 @@
-import React, { useState } from 'react';
+/*
+  Frontend Hauptkomponente (React)
+
+  Diese Komponente enthält die gesamte kleine UI für Upload, Überprüfung
+  und Trainings-Preview. Die wichtigsten Punkte:
+  - Upload: PDF auswählen, Datei wird an `/api/ocr` geschickt. Die
+    Server-Antwort (ocrText) geht dann an `/nlp/extract`.
+  - Review/Überprüfung: Hier siehst du erkannte Felder, kannst sie
+    manuell korrigieren und Feedback absenden.
+  - Training: Verifizierte Rechnungen werden hier gezählt (Pseudofeature).
+
+  Hinweis: Die UI ist bewusst simpel und für manuelle Prüfungen gedacht.
+*/
+import React, { useState, useEffect } from 'react';
+import { ocrUpload, nlpExtract } from './lib/api';
 import { Upload, Download, Settings, CheckCircle, AlertCircle, Eye } from 'lucide-react';
-// Demo/Test component removed — demo functionality disabled
+// Hinweis: Kompakte Company-Formular-Komponente wurde durch Inline-UI ersetzt
+
 
 const InvoiceApp = () => {
   const [invoices, setInvoices] = useState([]);
@@ -9,37 +24,151 @@ const InvoiceApp = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [trainingData, setTrainingData] = useState([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [company, setCompany] = useState(null);
+  const [editingCompany, setEditingCompany] = useState(false);
+  const [companyName, setCompanyName] = useState('');
+  const [companyStreet, setCompanyStreet] = useState('');
+  const [companyZip, setCompanyZip] = useState('');
+  const [companyCity, setCompanyCity] = useState('');
+  const [companyVat, setCompanyVat] = useState('');
 
-  // Simulierte OCR und KI-Verarbeitung
-  const processInvoice = (file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      // Simulierte OCR - in echter App würde hier ein OCR-Service wie Tesseract verwendet
-      const simulatedData = {
-        id: Date.now(),
-        fileName: file.name,
-        uploadDate: new Date().toLocaleDateString('de-DE'),
-        type: Math.random() > 0.5 ? 'Ausgangsrechnung' : 'Eingangsrechnung',
-        invoiceNumber: `RG-${Math.floor(Math.random() * 10000)}`,
-        date: new Date().toLocaleDateString('de-DE'),
-        vendor: ['Musterfirma GmbH', 'ABC Lieferant', 'XYZ Services', 'Tech Solutions'][Math.floor(Math.random() * 4)],
-        totalAmount: (Math.random() * 5000 + 100).toFixed(2),
-        currency: 'EUR',
-        taxAmount: (Math.random() * 1000).toFixed(2),
-        description: 'Automatisch erfasst',
-        items: [
-          { description: 'Produkt/Service 1', amount: (Math.random() * 2000).toFixed(2), quantity: Math.floor(Math.random() * 10) + 1 },
-          { description: 'Produkt/Service 2', amount: (Math.random() * 1500).toFixed(2), quantity: Math.floor(Math.random() * 8) + 1 }
-        ],
-        confidence: (Math.random() * 30 + 70).toFixed(1),
+  // Lade Firmenprofil vom Server
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await fetch('/api/company');
+        const j = await r.json();
+        if (j && j.company) setCompany(j.company);
+      } catch (e) {
+        console.error('failed to load company', e);
+      }
+    };
+    load();
+  }, []);
+
+  // Setze Editier-Felder beim Betreten des Bearbeitungsmodus
+  useEffect(() => {
+    if (editingCompany && company) {
+      setCompanyName(company.name || '');
+      setCompanyStreet(company.street || '');
+      setCompanyZip(company.zip_code || '');
+      setCompanyCity(company.city || '');
+      setCompanyVat(company.vat_id || '');
+    }
+  }, [editingCompany, company]);
+
+  const saveCompany = async () => {
+    try {
+      const payload = { name: companyName, street: companyStreet, zip_code: companyZip, city: companyCity, vat_id: companyVat };
+      const r = await fetch('/api/company', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const j = await r.json();
+      if (j && (j.ok || j.created || j.updated)) {
+        // reload
+        const rr = await fetch('/api/company');
+        const jj = await rr.json();
+        if (jj && jj.company) setCompany(jj.company);
+        setEditingCompany(false);
+      }
+    } catch (e) {
+      console.error('saveCompany error', e);
+    }
+  };
+
+  // Echte Pipeline: PDF an `/api/ocr` senden, dann `/nlp/extract` aufrufen
+  const processInvoice = async (file) => {
+    // Ablaufbeschreibung:
+    // 1) Erstellung eines FormData-Objekts und Senden der Datei an `/api/ocr`.
+    // 2) Empfang von `ocrText` (oder einer strukturierten OCR-Antwort) vom Server.
+    // 3) Aufruf von `/nlp/extract` mit dem `ocrText`, Rückgabe eines
+    //    `extractedData`-Objekts und Abbildung der Felder in den Invoice-State.
+    // 4) Bei fehlendem OCR-Text oder Extraktionsfehlern wird ein Fallback-Eintrag verwendet.
+    const fallbackSimulated = () => ({
+      id: Date.now(),
+      fileName: file.name,
+      uploadDate: new Date().toLocaleDateString('de-DE'),
+      type: Math.random() > 0.5 ? 'Ausgangsrechnung' : 'Eingangsrechnung',
+      invoiceNumber: `RG-${Math.floor(Math.random() * 10000)}`,
+      date: new Date().toLocaleDateString('de-DE'),
+      vendor: 'Unbekannt',
+      totalAmount: '0.00',
+      currency: 'EUR',
+      taxAmount: '0.00',
+      description: 'Automatisch erfasst',
+      items: [],
+      confidence: (Math.random() * 30 + 70).toFixed(1),
+      verified: false,
+      corrections: {}
+    });
+
+    // Erstelle eine Basis-Rechnung (schneller Fallback), damit die UI sofort etwas anzeigt
+    let invoiceBase = fallbackSimulated();
+
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const ocrResp = await ocrUpload(form);
+      const ocrText = (ocrResp && (ocrResp.ocrText || ocrResp.text)) ? (ocrResp.ocrText || ocrResp.text) : null;
+
+      if (!ocrText) {
+        // Kein OCR-Text zurückerhalten — verwende Fallback-Eintrag
+        setInvoices(prev => [...prev, invoiceBase]);
+        setTrainingData(prev => [...prev, invoiceBase]);
+        return;
+      }
+
+      // Rufe den NLP-Extraktor auf
+      const nlpResp = await nlpExtract({ requestId: 'ui-' + Date.now(), ocrText });
+
+      // Normalisiere die vorhergesagten extrahierten Daten
+      const ed = (nlpResp && (nlpResp.data && nlpResp.data.extractedData)) || (nlpResp && nlpResp.prediction && nlpResp.prediction.extractedData) || (nlpResp && nlpResp.extractedData) || {};
+
+      // Unterstütze auch das Array `data.fields` (älteres/alternatives Format)
+      const fieldsObj = {};
+      if (nlpResp && nlpResp.data && Array.isArray(nlpResp.data.fields)) {
+        nlpResp.data.fields.forEach(f => { if (f && f.name) fieldsObj[f.name] = f.value; });
+      }
+
+      // Merge in das Invoice-Objekt (vorzugsweise NLP-Werte verwenden)
+      const merged = {
+        id: invoiceBase.id,
+        fileName: invoiceBase.fileName,
+        uploadDate: invoiceBase.uploadDate,
+        type: fieldsObj.TYPE || (ed && ed.classification) || invoiceBase.type,
+        invoiceNumber: fieldsObj.INVOICE_NO || ed.invoiceNumber || invoiceBase.invoiceNumber,
+        date: fieldsObj.INVOICE_DATE || ed.issueDate || invoiceBase.date,
+        vendor: fieldsObj.SUPPLIER_NAME || (ed.vendor && ed.vendor.name) || invoiceBase.vendor,
+        vendorAddressRaw: fieldsObj.SUPPLIER_ADDRESS || (ed.vendor && ed.vendor.raw) || undefined,
+        vendorStreet: fieldsObj.SUPPLIER_ADDRESS_STREET || (ed.vendor && ed.vendor.street) || undefined,
+        vendorCity: fieldsObj.SUPPLIER_ADDRESS_CITY || ((ed.vendor && ((ed.vendor.zip_code ? (ed.vendor.zip_code + ' ') : '') + (ed.vendor.city || ''))) || undefined),
+        recipientName: fieldsObj.RECIPIENT_NAME || (ed.recipient && ed.recipient.name) || undefined,
+        recipientAddressRaw: fieldsObj.RECIPIENT_ADDRESS || (ed.recipient && ed.recipient.raw) || undefined,
+        recipientStreet: fieldsObj.RECIPIENT_STREET || (ed.recipient && ed.recipient.street) || undefined,
+        recipientCity: fieldsObj.RECIPIENT_CITY || ((ed.recipient && ((ed.recipient.zip_code ? (ed.recipient.zip_code + ' ') : '') + (ed.recipient.city || ''))) || undefined),
+        items: fieldsObj.ITEMS ? ((() => { try { return JSON.parse(fieldsObj.ITEMS); } catch(e){ return ed.items || invoiceBase.items; } })()) : (ed.items || invoiceBase.items),
+        totalAmount: fieldsObj.TOTAL_GROSS || ed.grossTotal || invoiceBase.totalAmount,
+        grossTotal: fieldsObj.TOTAL_GROSS || ed.grossTotal || invoiceBase.grossTotal || invoiceBase.totalAmount,
+        taxAmount: fieldsObj.VAT_AMOUNT || ed.vatAmount || invoiceBase.taxAmount,
+        taxId: fieldsObj.TAX_ID || ed.taxId || ed.taxId || undefined,
+        taxNumber: fieldsObj.TAX_NUMBER || ed.taxNumber || undefined,
+        paymentTerms: fieldsObj.PAYMENT_TERMS || ed.paymentTerms || undefined,
+        usage: fieldsObj.USAGE || ed.usage || undefined,
+        iban: fieldsObj.IBAN || ed.iban || undefined,
+        bic: fieldsObj.BIC || ed.bic || undefined,
+        bankName: fieldsObj.BANK_NAME || (ed.vendor && ed.vendor.bank) || undefined,
+        description: invoiceBase.description,
+        ocrText: ocrText || '',
+        confidence: Math.round((nlpResp && nlpResp.data && nlpResp.data.confidence ? nlpResp.data.confidence : (nlpResp && nlpResp.confidence) || 0) * 100)/100 || invoiceBase.confidence,
         verified: false,
         corrections: {}
       };
 
-      setInvoices(prev => [...prev, simulatedData]);
-      setTrainingData(prev => [...prev, simulatedData]);
-    };
-    reader.readAsArrayBuffer(file);
+      setInvoices(prev => [...prev, merged]);
+      setTrainingData(prev => [...prev, merged]);
+    } catch (e) {
+      console.warn('processInvoice: OCR/NLP pipeline failed, using fallback', e);
+      setInvoices(prev => [...prev, invoiceBase]);
+      setTrainingData(prev => [...prev, invoiceBase]);
+    }
   };
 
   const handleFileUpload = (e) => {
@@ -52,6 +181,9 @@ const InvoiceApp = () => {
   };
 
   const updateInvoiceField = (invoiceId, field, value) => {
+    // Einfache lokale Aktualisierung einer Rechnung im Zustand.
+    // Die Korrektur wird zusätzlich in `corrections` gespeichert, sodass
+    // die Feedback-Funktion später nachvollziehen kann, welche Änderungen vorgenommen wurden.
     setInvoices(invoices.map(inv => 
       inv.id === invoiceId 
         ? { ...inv, [field]: value, corrections: { ...inv.corrections, [field]: value } }
@@ -66,16 +198,26 @@ const InvoiceApp = () => {
   };
 
   const exportToExcel = () => {
-    const headers = ['Rechnungsnummer', 'Typ', 'Datum', 'Lieferant', 'Gesamtbetrag', 'Währung', 'Steuerbetrag', 'Vertrauenswert', 'Status'];
+    const headers = ['Rechnungsnummer', 'Typ', 'Datum', 'Lieferant', 'Lieferant Adresse', 'Empfänger', 'Empfänger Adresse', 'Gesamtbetrag (Netto)', 'Gesamtbetrag (Brutto)', 'Währung', 'Steuerbetrag', 'USt-Id', 'Steuernummer', 'IBAN', 'BIC', 'Bank', 'Verwendungszweck', 'Vertrauenswert', 'Status'];
     const rows = invoices.map(inv => [
       inv.invoiceNumber,
       inv.type,
       inv.date,
       inv.vendor,
-      inv.totalAmount,
-      inv.currency,
-      inv.taxAmount,
-      inv.confidence + '%',
+      inv.vendorAddressRaw || '',
+      inv.recipientName || '',
+      inv.recipientAddressRaw || '',
+      inv.totalAmount || '',
+      inv.grossTotal || '',
+      inv.currency || '',
+      inv.taxAmount || '',
+      inv.taxId || '',
+      inv.taxNumber || '',
+      inv.iban || '',
+      inv.bic || '',
+      inv.bankName || '',
+      inv.usage || '',
+      (inv.confidence !== undefined ? (String(inv.confidence) + '%') : ''),
       inv.verified ? 'Verifiziert' : 'Ungeprüft'
     ]);
 
@@ -98,13 +240,23 @@ const InvoiceApp = () => {
       typ: inv.type,
       datum: inv.date,
       lieferant: inv.vendor,
-      gesamtbetrag: inv.totalAmount,
-      währung: inv.currency,
-      steuerbetrag: inv.taxAmount,
-      beschreibung: inv.description,
-      vertrauenswert: inv.confidence,
-      verifiziert: inv.verified,
-      artikel: inv.items
+      lieferant_adresse_raw: inv.vendorAddressRaw || null,
+      empfänger_name: inv.recipientName || null,
+      empfänger_adresse_raw: inv.recipientAddressRaw || null,
+      gesamtbetrag_netto: inv.totalAmount || null,
+      gesamtbetrag_brutto: inv.grossTotal || null,
+      währung: inv.currency || null,
+      steuerbetrag: inv.taxAmount || null,
+      ust_id: inv.taxId || null,
+      steuernummer: inv.taxNumber || null,
+      iban: inv.iban || null,
+      bic: inv.bic || null,
+      bankname: inv.bankName || null,
+      verwendungszweck: inv.usage || null,
+      beschreibung: inv.description || null,
+      vertrauenswert: inv.confidence || null,
+      verifiziert: inv.verified || false,
+      artikel: inv.items || []
     }));
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -115,7 +267,7 @@ const InvoiceApp = () => {
     a.click();
   };
 
-  // Feedback (error reporting) state & helpers
+  // Feedback-/Fehler-Metatate: Zustand und Helferfunktionen
   const [feedbacks, setFeedbacks] = useState([]);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [fbInvoiceId, setFbInvoiceId] = useState(null);
@@ -140,6 +292,27 @@ const InvoiceApp = () => {
     setShowFeedbackModal(true);
   };
 
+  // OCR-Panel-Zustand: Anzeige-Steuerung und ausgewählte Zielfeld-Mappings pro Rechnung
+  const [ocrPanelOpen, setOcrPanelOpen] = useState({});
+  const [ocrSelectedField, setOcrSelectedField] = useState({});
+
+  const toggleOcrPanel = (invoiceId) => {
+    setOcrPanelOpen(prev => ({ ...prev, [invoiceId]: !prev[invoiceId] }));
+  };
+
+  const updateOcrText = (invoiceId, text) => {
+    // store edited OCR text back into invoice state
+    updateInvoiceField(invoiceId, 'ocrText', text);
+  };
+
+  const applyOcrToField = (invoiceId) => {
+    const field = ocrSelectedField[invoiceId];
+    const inv = invoices.find(i => i.id === invoiceId);
+    if (!field || !inv) return;
+    const text = inv.ocrText || '';
+    updateInvoiceField(invoiceId, field, text);
+  };
+
   const submitFeedback = () => {
     const feedback = {
       id: Date.now(),
@@ -158,6 +331,11 @@ const InvoiceApp = () => {
       timestamp: new Date().toISOString()
     };
 
+    // Feedback lokal speichern und als Download vorbereiten.
+    // Wichtig: Dieses Feedback wird nicht automatisch an das Backend
+    // gesendet — in dieser UI wird es als JSON/XML zum Herunterladen
+    // bereitgestellt, damit ein Operator es später manuell verarbeiten
+    // oder per Tool in das Trainingssystem eingespeist werden kann.
     setFeedbacks(prev => [...prev, feedback]);
 
     // also attach to invoice for UI traceability
@@ -172,7 +350,7 @@ const InvoiceApp = () => {
       a.download = `feedback_${feedback.id}.json`;
       a.click();
     } else {
-      // simple XML serialization
+      // Einfache XML-Serialisierung des Feedback-Objekts
       const xml = `<?xml version="1.0" encoding="utf-8"?>\n<feedback>\n  <id>${feedback.id}</id>\n  <invoiceId>${feedback.invoiceId}</invoiceId>\n  <field>${feedback.field}</field>\n  <detectedText>${escapeXml(feedback.detectedText)}</detectedText>\n  <correctText>${escapeXml(feedback.correctText)}</correctText>\n  <page>${feedback.page}</page>\n  <bbox>\n    <x>${feedback.bbox.x}</x>\n    <y>${feedback.bbox.y}</y>\n    <width>${feedback.bbox.width}</width>\n    <height>${feedback.bbox.height}</height>\n  </bbox>\n  <errorType>${feedback.errorType}</errorType>\n  <timestamp>${feedback.timestamp}</timestamp>\n</feedback>`;
       const blob = new Blob([xml], { type: 'application/xml' });
       const url = window.URL.createObjectURL(blob);
@@ -243,6 +421,9 @@ const InvoiceApp = () => {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">📋 Rechnungsverarbeitung KI</h1>
           <p className="text-gray-600">Automatische Erfassung von Ein- und Ausgangsrechnungen</p>
+          <div>
+            <CompanyForm onChange={(c)=>{ /* noop */ }} />
+          </div>
         </div>
 
         {/* Navigation */}
@@ -291,7 +472,7 @@ const InvoiceApp = () => {
             <Download className="inline mr-2" size={20} />
             Export
           </button>
-          {/* Demo tab removed */}
+          {/* Demo-Registerkarte entfernt */}
         </div>
 
         {/* Upload Tab */}
@@ -432,6 +613,293 @@ const InvoiceApp = () => {
                       </div>
                     </div>
 
+                    {/* Extended NLP fields (additional inputs shown in example UI) */}
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Leistungsdatum</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.serviceDate || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'serviceDate', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'serviceDate')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Lieferant Straße / Ort (parsing)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.vendorStreet || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'vendorStreet', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="Straße"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'vendorStreet')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={invoice.vendorCity || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'vendorCity', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="PLZ Ort"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Kunde Name</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.recipientName || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'recipientName', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'recipientName')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Kunde Straße / Ort</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.recipientStreet || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'recipientStreet', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="Straße"
+                          />
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={invoice.recipientCity || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'recipientCity', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="PLZ Ort"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">USt-Id / Steuernummer</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.taxId || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'taxId', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="USt-Id"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'taxId')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={invoice.taxNumber || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'taxNumber', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="Steuernummer"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Zahlungsbedingungen / Verwendungszweck</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.paymentTerms || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'paymentTerms', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="Zahlungsbedingungen"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'paymentTerms')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                          <input
+                            type="text"
+                            value={invoice.usage || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'usage', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="Verwendungszweck"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Gesamt (Brutto)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.grossTotal || invoice.totalAmount || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'grossTotal', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'grossTotal')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Bank / Konto</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.bankName || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'bankName', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                            placeholder="Bankname"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'bankName')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional extracted fields: addresses, items, bank details */}
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Lieferant - Adresse (roh)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.vendorAddressRaw || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'vendorAddressRaw', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'vendorAddressRaw')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Empfänger - Adresse (roh)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.recipientAddressRaw || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'recipientAddressRaw', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'recipientAddressRaw')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Items / Positionen */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Positionen</label>
+                      {invoice.items && invoice.items.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm border-collapse">
+                            <thead>
+                              <tr className="bg-gray-100">
+                                <th className="border px-2 py-1 text-left">Beschreibung</th>
+                                <th className="border px-2 py-1">Menge</th>
+                                <th className="border px-2 py-1">Preis</th>
+                                <th className="border px-2 py-1">Gesamt</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {invoice.items.map((it, idx) => (
+                                <tr key={idx} className="odd:bg-white even:bg-gray-50">
+                                  <td className="border px-2 py-1">{(it.description || it.raw || JSON.stringify(it))}</td>
+                                  <td className="border px-2 py-1 text-center">{it.quantity || it.qty || ''}</td>
+                                  <td className="border px-2 py-1 text-right">{it.unitOrPrice || it.amount || ''}</td>
+                                  <td className="border px-2 py-1 text-right">{it.lineTotal || ''}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">Keine Positionen erkannt</p>
+                      )}
+                    </div>
+
+                    {/* Bank details */}
+                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">IBAN</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.iban || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'iban', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'iban')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">BIC</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={invoice.bic || ''}
+                            onChange={(e) => updateInvoiceField(invoice.id, 'bic', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                          <button onClick={() => openFeedback(invoice.id, 'bic')} className="px-3 py-2 bg-yellow-400 rounded text-sm">Feedback</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* OCR Panel toggle and editor */}
+                    {/* OCR-Panel: Manuelle Bearbeitung des Rohtexts
+                        Dieses Panel erlaubt es, den Rohtext zu sehen und
+                        manuell in ein Ziel-Feld zu übertragen. Praktisch
+                        solange die automatische Extraktion noch nicht
+                        perfekt ist (z. B. bei zweispaltigen Kopfbereichen).
+                    */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-gray-700">OCR Rohtext</h4>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => toggleOcrPanel(invoice.id)} className="px-3 py-1 text-sm bg-indigo-100 rounded">{ocrPanelOpen[invoice.id] ? 'Verbergen' : 'Anzeigen'}</button>
+                          <button onClick={() => { navigator.clipboard && navigator.clipboard.writeText(invoice.ocrText || ''); }} className="px-3 py-1 text-sm bg-gray-100 rounded">In Zwischenablage</button>
+                        </div>
+                      </div>
+
+                      {ocrPanelOpen[invoice.id] && (
+                        <div className="border rounded p-3 bg-gray-50">
+                          <textarea
+                            value={invoice.ocrText || ''}
+                            onChange={(e) => updateOcrText(invoice.id, e.target.value)}
+                            rows={8}
+                            className="w-full border p-2 rounded text-sm font-mono"
+                          />
+
+                          <div className="flex gap-2 items-center mt-2">
+                            <label className="text-sm">In Feld kopieren:</label>
+                            <select value={ocrSelectedField[invoice.id] || ''} onChange={(e) => setOcrSelectedField(prev => ({ ...prev, [invoice.id]: e.target.value }))} className="border px-2 py-1 text-sm">
+                              <option value="">-- Feld wählen --</option>
+                              <option value="vendor">Lieferant/Name</option>
+                              <option value="vendorAddressRaw">Lieferant Adresse (roh)</option>
+                              <option value="recipientName">Empfänger/Name</option>
+                              <option value="recipientAddressRaw">Empfänger Adresse (roh)</option>
+                              <option value="iban">IBAN</option>
+                              <option value="bic">BIC</option>
+                              <option value="totalAmount">Gesamtbetrag</option>
+                              <option value="items">Positionen (JSON)</option>
+                            </select>
+                            <button onClick={() => applyOcrToField(invoice.id)} className="px-3 py-1 bg-indigo-600 text-white rounded text-sm">Übernehmen</button>
+                            <button onClick={() => updateOcrText(invoice.id, '')} className="px-3 py-1 bg-red-100 rounded text-sm">Leeren</button>
+                          </div>
+
+                          <p className="text-xs text-gray-500 mt-2">Tipp: Markieren, kopieren und manuell in Felder einfügen für gezielte Korrekturen.</p>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <span className="text-sm text-gray-600">Vertrauenswert: <span className="font-semibold">{invoice.confidence}%</span></span>
@@ -539,7 +1007,7 @@ const InvoiceApp = () => {
           </div>
         )}
 
-        {/* Demo removed: no demo UI rendered */}
+        {/* Demo entfernt: kein Demo-UI wird angezeigt */}
 
         {/* Feedback Modal */}
         {showFeedbackModal && (

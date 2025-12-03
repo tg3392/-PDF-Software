@@ -1,0 +1,38 @@
+{
+  "invoiceType": "Ausgangsrechnung",
+  "invoiceNumber": "INV-2025-1001",
+  "invoiceDate": "2025-11-30",
+  "serviceDate": "2025-11-28",
+  "vendor": {
+    "name": "Mustermann GmbH",
+    "street": "Musterstraße 11",
+    "zip_code": "12345",
+    "city": "Musterstadt",
+    "country": "DE",
+    "vat_id": "DE123456789"
+  },
+  "customer": {
+    "name": "Beispielkunde AG",
+    "street": "Kundenstraße 5",
+    "zip_code": "54321",
+    "city": "Kundenstadt",
+    "country": "DE"
+  },
+  "orderNumber": "PO-7788",
+  "currency": "EUR",
+  "items": [
+    { "pos": 1, "description": "Beratungsleistung: Softwareintegration", "quantity": 10, "unit": "h", "unit_price_net": 75.00, "line_total_net": 750.00 },
+    { "pos": 2, "description": "Support (monatlich)", "quantity": 1, "unit": "Service", "unit_price_net": 150.00, "line_total_net": 150.00 }
+  ],
+  "totals": {
+    "total_net": 900.00,
+    "taxes": [ { "rate": "19%", "amount": 171.00 } ],
+    "total_gross": 1071.00
+  },
+  "payment": {
+    "due_days": 14,
+    "bank": { "iban": "DE89370400440532013000", "bic": "COBADEFFXXX", "bank_name": "Musterbank" },
+    "reference": "INV-2025-1001"
+  },
+  "notes": "Vielen Dank für Ihren Auftrag."
+}

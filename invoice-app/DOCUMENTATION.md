@@ -1,94 +1,121 @@
+# Invoice App — Bedienung, Architektur und Schritt‑für‑Schritt Anleitung
 
-# Invoice App — Bedienung, Architektur und Entwicklerhinweise
+Dieses Dokument erklärt, was die App macht, wie die Teile zusammenarbeiten und wie sie lokal installiert und benutzt werden kann. Die Texte sind in einem leicht lesbaren, praxisnahen Stil formuliert — so, wie man einem Kollegen die Anwendung und das Aufsetzen erklären würde.
 
-Dieses Dokument beschreibt die App: was sie macht, wie sie aufgebaut ist, wie man sie lokal startet und welche Schnittstellen relevant sind. Ziel ist, dass Teams (Frontend, OCR, NLP, DB) schnell verstehen, wie die Teile zusammenarbeiten.
+Kurzüberblick
+- Zweck: PDFs (Rechnungen) einlesen, Vorschläge für strukturierte Felder liefern, manuelle Korrekturen erlauben und Feedback/Trainingsdaten speichern.
+- Typischer Ablauf: Upload → OCR → NLP/Extraktion → Überprüfung → Korrektur/Feedback → Speichern / Export.
 
-Kurzbeschreibung
-- Ziel: Rechnungen (PDF) automatisch auslesen, strukturierte Felder vorschlagen, Korrekturen und Feedback erfassen und final speichern.
-- Ablauf: Upload → OCR → NLP/Extraktion → Review → Korrektur/Feedback → Speichern.
+Wichtige Funktionen
+- Automatischer PDF‑Upload und OCR‑Verarbeitung.
+- Heuristische Extraktion von Rechnungsfeldern (Lieferant/Empfänger, Rechnungsnummer, Datum, Positionen, Steuern, Summen).
+- Einfache Klassifikation (Eingangs- vs. Ausgangsrechnung).
+- Review‑UI für manuelle Korrekturen und Feedback‑Erzeugung.
+- Lokale Persistenz in SQLite für Rechnungen und Feedback.
 
-Funktionen (Kurz)
-- PDF‑Upload und OCR‑Textgewinnung.
-- Heuristische NLP‑Extraktion von Feldern (Lieferant/Empfänger, Rechnungsnummer, Datum, Positionen, Steuern, Gesamtsumme).
-- Klassifikation: Eingangs‑ vs. Ausgangsrechnung.
-- Review‑UI mit Feldern zur Korrektur und Feedback‑Export.
-- Persistenz: Speicherung von Rechnungen und Feedback in SQLite (lokal) mit einfachem Company‑Profil.
+Architektur (kurz)
+- Frontend: React + Vite. Haupteinstiegspunkt: `src/pages/App.jsx`.
+- Backend: Node + Express, Implementierung in `server/index.js`.
+- Persistenz: SQLite in `server/data.db`.
+- Grober Datenfluss: Frontend lädt PDF hoch → `/api/ocr` → `ocrText` → `/nlp/extract` → `prediction` → Frontend zeigt Resultat und sendet ggf. `/nlp/feedback`.
 
-Architekturübersicht
-- Frontend: React + Vite, Hauptseite `src/pages/App.jsx`.
-- Backend: Node/Express in `server/index.js`, SQLite für lokale Persistenz.
-- Datenfluss: Frontend lädt PDF hoch → Backend `/api/ocr` liefert `ocrText` → Frontend ruft `/nlp/extract` → Backend liefert `prediction` → Frontend zeigt Ergebnis, sendet ggf. `/nlp/feedback` und `/api/invoices`.
-
-Wichtige Endpunkte (Kurzreferenz)
-- POST /api/ocr — PDF upload (multipart/form-data `file`) → `{ ok: true, ocrText, pages?, ocrResult?, savedFile? }`.
-- POST /nlp/extract — `{ ocrText }` → `{ ok: true, prediction: { classification, status, extractedData, confidence, meta? } }`.
-- POST /nlp/feedback — Trainingsdaten: `{ originalPrediction, editedPrediction, ... }` → `{ ok: true, trainingId? }`.
-- POST /api/invoices — persistiert finale Rechnung → `{ ok: true, id }`.
-- POST /api/feedbacks — persistiert einzelnes Feedback‑Item → `{ ok: true, feedbackId }`.
-- GET /api/company & POST /api/company — lesen/setzen des lokalen Unternehmer‑Profils.
+API‑Kurzreferenz
+- `POST /api/ocr` — Datei hochladen (multipart/form-data `file`). Antwort enthält mind. `{ ok: true, ocrText }`.
+- `POST /nlp/extract` — Body: `{ requestId?, ocrText?, ocrResult? }`. Antwort enthält `prediction` mit `extractedData`, `classification` und `confidence`.
+- `POST /nlp/feedback` — Feedback/Trainingsdaten (original vs. edited prediction).
+- `GET/POST /api/company` — Firmenprofil lesen/setzen.
+- `POST /api/invoices` — finale Rechnung persistieren.
 
 Datenformat‑Hinweise
-- `extractedData.vendor` und `extractedData.recipient` sind bevorzugt strukturierte Objekte: `{ name, street, zip_code, city, raw }`.
-- Datum: ISO (YYYY‑MM‑DD). Zahlen: Dezimalpunkt (e.g. 1234.56).
-- `confidence` zwischen 0 und 1; `status` beschreibt Vollständigkeit (`Extrahiert`, `Prüfung erforderlich`, ...).
+- Adressen: bevorzugt als Objekt `{ name, street, zip_code, city, raw }`.
+- Datum: ISO (YYYY‑MM‑DD). Zahlen: Dezimalpunkt (z. B. `1234.56`).
+- `confidence`: numerischer Wert (z. B. `0.92`). `status` beschreibt Zustand (`extrahiert`, `teilweise`, `prüfung_erforderlich`).
 
-WasWichtig für die Entwickler:
+Installation & Start (Windows / PowerShell)
 
-Frontend
-- Hauptkomponenten: `src/pages/App.jsx` (Upload, Review, Training, Export). Passe hier die Fetch‑Ziele an, wenn Backend‑URL/Port abweichen.
-- UX: Felder lassen sich editieren; Korrekturen werden lokal gehalten und können als Feedback via `/nlp/feedback` gesendet werden.
+Voraussetzungen
+- Node.js (v16+ empfohlen).
+- Optional: Python, wenn ein lokaler OCR‑Wrapper auf Basis von FastAPI genutzt werden soll.
 
-OCR
-- Implementiere `/api/ocr` so, dass `ocrText` zuverlässig zurückkommt (UTF‑8 Fließtext).
-- Optional: Rückgabe von Layoutdaten (Seiten, Bounding‑Boxes) in `ocrResult`.
-- Validierung: Nicht‑PDF → 400, beschädigt → 422, sonst 200.
-
-NLP
-- `/nlp/extract` muss `prediction` liefern mit `extractedData` (siehe Felder oben), `classification` und `confidence`.
-- Normalisiere Datums‑ und Zahlenformate. Markiere `vendor.isOwnCompany` bei Übereinstimmung mit `/api/company`.
-- Bei niedriger Sicherheit `confidence` niedrig setzen und `status` entsprechend melden.
-
-Datenbank / Persistenz
-- Lokale DB: SQLite (`server/data.db`). Tabellen: `invoices`, `feedbacks`, `training`, `company`.
-- `vendor` kann JSON gespeichert werden, um Struktur zu erhalten. Indexe auf `invoiceNumber` und `vendor.name` empfohlen.
-- Schreibe Transaktionen für atomare Operationen (z. B. invoice + feedback).
-
-Lokal starten
-- Backend (server):
+Backend starten
+1. PowerShell öffnen.
+2. In das Backend‑Verzeichnis wechseln und Abhängigkeiten installieren:
 
 ```powershell
 cd "D:\Studium\5.Semester\Softwaretechnik-Labor\-PDF-Software\invoice-app\server"
 npm install
+```
+
+3. Server starten:
+
+```powershell
 node index.js
 ```
 
-- Frontend (Vite):
+Der Server hört standardmäßig auf Port `3000`. Die Health‑Route ist `http://localhost:3000/api/health`.
+
+Frontend starten
+1. Neues PowerShell‑Fenster öffnen.
+2. In das Projekt‑Frontend wechseln und Abhängigkeiten installieren:
 
 ```powershell
 cd "D:\Studium\5.Semester\Softwaretechnik-Labor\-PDF-Software\invoice-app"
 npm install
+```
+
+3. Dev‑Server starten:
+
+```powershell
 npm run dev
 ```
 
-Hinweis: Frontend erwartet standardmäßig Backend unter `http://localhost:3000`. Bei abweichendem Port anpassen oder Vite‑Proxy konfigurieren.
+Standardmäßig ist Vite unter `http://localhost:5173` erreichbar. API‑Aufrufe werden an `http://localhost:3000` erwartet; bei anderem Backend‑Port Vite‑Proxy oder Frontend‑Konfiguration anpassen.
 
-Fehlerbehandlung & Troubleshooting (Kurz)
-- Port belegt: Prüfe laufende Prozesse (`netstat -ano`) und stoppe den Prozess oder starte Backend auf anderem Port.
-- OCR liefert leere Texte: prüfe PDF‑Datei und OCR‑Library; teste mit mehreren Samples.
-- NLP‑Extraktion falsch: Logs prüfen, Confidence‑Schwellen anpassen, Trainingsdaten via `/nlp/feedback` sammeln.
+Optional: OCR‑Wrapper (FastAPI/Python)
+- Wenn ein lokaler OCR‑Wrapper genutzt werden soll, existiert ein Startskript `start_ocr_wrapper.ps1` im `server`‑Ordner. Die App prüft die üblichen lokalen Wrapper‑URLs (8003, 8002, 8001) und fällt sonst auf `pdf-parse` zurück.
 
+```powershell
+cd "D:\Studium\5.Semester\Softwaretechnik-Labor\-PDF-Software\invoice-app\server"
+.\start_ocr_wrapper.ps1
+```
 
-Bedienoberfläche — Buttons
-- Header: `Firma bearbeiten` — öffnet das Formular, um die gespeicherte Unternehmer‑Adresse zu ändern.
+Kurzer Smoke‑Test
+- OCR + NLP mit Beispiel‑PDF testen (PowerShell‑Beispiel):
 
-- Navigation (oben):
-	- `Upload` — Öffnet die Upload‑Ansicht. Ziehe oder wähle PDF‑Dateien aus, die App lädt sie hoch und startet die automatische Verarbeitung (OCR → NLP). Nach der Verarbeitung erscheinen die erkannten Rechnungen in der "Überprüfung".
-	- `Überprüfung` — Zeigt alle erkannten Rechnungen zur Kontrolle. Du kannst Felder direkt bearbeiten, per "Feedback" Korrekturen speichern/exportieren, eine Vorschau öffnen oder die Rechnung als geprüft markieren (Verifizieren). Änderungen an der Rechnungsart (Dropdown) werden als Klassifikations‑Feedback an den Server gesendet.
-	- `Lernen` — Trainingsbereich, um Dokumente für das weitere Modelltraining vorzumerken. Hier sammelst du gezielt gute oder problematische Beispiele, die später als Trainingsdaten genutzt werden können.
-	- `Export` — Bietet Export‑Optionen: Tabellenexport (CSV), vollständige Daten (JSON) und gesammelte Feedbacks (JSON oder XML). Nutze diese Buttons, um lokale Backups oder Trainingsdaten zu exportieren.
-	- `Exportieren (CSV)` — lädt eine Tabelle mit den Rechnungen als CSV herunter.
-	- `Exportieren (JSON)` — lädt alle Rechnungsdaten als JSON‑Datei herunter.
-	- `Feedbacks (JSON)` / `Feedbacks (XML)` — exportiert alle gesammelten Feedback‑Einträge im gewählten Format.
+```powershell
+# Beispielablauf (auskommentiert, kann Zeile für Zeile ausgeführt werden):
+#$ocr = curl.exe -s -F "file=@example-invoice-for-upload.pdf" http://127.0.0.1:3000/api/ocr | ConvertFrom-Json
+#$body = @{ requestId = "smoke-$(Get-Date -UFormat %s)"; ocrText = $ocr.ocrText } | ConvertTo-Json -Depth 5
+#Invoke-RestMethod -Uri 'http://127.0.0.1:3000/nlp/extract' -Method Post -Body $body -ContentType 'application/json'
+```
 
+Benutzung — Schritt für Schritt (GUI)
+1. `Upload` öffnen.
+2. PDF per Drag & Drop oder Dateiauswahl hochladen.
+3. Verarbeiten lassen (OCR → NLP).
+4. `Überprüfung` öffnen und erkannten Werte prüfen bzw. korrigieren.
+5. Korrekturen speichern oder als Feedback absenden.
+6. Rechnungen bei Bedarf als CSV/JSON exportieren.
 
+Wichtige Bedienelemente
+- `Firma bearbeiten`: eigenes Unternehmensprofil anpassen.
+- `Upload`: PDFs hochladen und automatische Verarbeitung starten.
+- `Überprüfung`: erkannte Rechnungen prüfen und verifizieren.
+- `Lernen` / `Training`: Beispiele für späteres Modelltraining markieren.
+- `Export`: Daten als CSV/JSON/XML exportieren.
 
+Fehlerbehebung (häufige Probleme)
+- Backend startet nicht: Ports prüfen, Logs lesen, `npm install` ausführen.
+- OCR liefert leere Ergebnisse: PDF prüfen (gescannt vs. digital), OCR‑Wrapper überprüfen oder `pdf-parse` testen.
+- Felder falsch extrahiert: Logs prüfen, Confidence‑Werte beachten und problematische Beispiele per Feedback sammeln.
+
+Entwicklerhinweise
+- Heuristiken und Hilfsfunktionen befinden sich in `server/nlp_utils.js`.
+- Hauptlogik für Upload/Extraktion/Feedback ist in `server/index.js`.
+- Frontend‑Mapping und UI‑Logik sind in `src/pages/App.jsx` implementiert.
+
+Hinweis zur Weiterentwicklung
+- Diese Anleitung ist bewusst praktisch gehalten. Für produktive Nutzung empfiehlt sich eine robustere OCR‑Pipeline mit Bounding‑Box‑Informationen, sowie eine Trainingspipeline für das NLP.
+
+Änderungshistorie
+- 2025‑11‑30: Dokumentation überarbeitet und um Installations‑ sowie Bedienungsanleitung ergänzt.
