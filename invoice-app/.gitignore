@@ -1,0 +1,14 @@
+# Ignore NLP model files and caches
+/nlp/invoice_nlp/model/
+/cache/
+
+# Local DB and uploads
+/server/data.db
+/server/uploads/
+
+# Build artifacts and archives
+*.tar
+dockerfiles.zip
+
+# Node modules
+/node_modules/

@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: tg3392/invoice-app-frontend:${TAG:-latest}
+    ports:
+      - "8000:80"
+    restart: unless-stopped
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      # adjust if your frontend expects a different API base URL
+      - VITE_API_BASE_URL=http://api:3000
+
+  api:
+    image: tg3392/invoice-app-api:${TAG:-latest}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    volumes:
+      - ./server/data.db:/app/data.db
+      - ./server/uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - NLP_API_URL=http://nlp_api:8000/extract
+      - NLP_API_TOKEN=secret-token
+      - OCR_WRAPPER_URL=http://ocr:8003/api/ocr
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - internal_net
+
+  ocr:
+    image: tg3392/invoice-app-ocr:${TAG:-latest}
+    ports:
+      - "8001:8003"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8003/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - internal_net
+
+  nlp_api:
+    image: apl83/nlp:1.0
+    ports:
+      - "8003:8000"
+    environment:
+      - NLP_API_TOKEN=secret-token
+      - NLP_FEEDBACK_DIR=/app/feedback
+      - NLP_MODEL_PATH=/app/invoice_nlp/model/model-best
+      - NLP_PENDING_DIR=/app/pending_results
+    volumes:
+      - ./cache/feedback:/app/feedback
+      - ./cache/pending_results:/app/pending_results
+      - ./nlp/invoice_nlp/model:/app/invoice_nlp/model:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - internal_net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-data:
+
+networks:
+  internal_net:
+    driver: bridge

@@ -28,8 +28,8 @@ services:
 
   ocr:
     build:
-      context: ./invoice-app/ocr
-      dockerfile: Dockerfile
+      context: ./invoice-app
+      dockerfile: ocr/Dockerfile
     volumes:
       - ./invoice-app/server:/ocr:cached
       - ./invoice-app/server/uploads:/ocr/uploads
