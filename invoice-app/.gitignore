@@ -1,14 +1,29 @@
-# Ignore NLP model files and caches
-/nlp/invoice_nlp/model/
-/cache/
+﻿# Node modules
+node_modules/
+server/node_modules/
 
-# Local DB and uploads
-/server/data.db
-/server/uploads/
+# Python virtualenvs
+.venv/
+venv/
 
-# Build artifacts and archives
+# Compiled / cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Large app-specific
+extracted/
+nlp/**/model/
+nlp/**/model/**
+server/nlp_service/__pycache__/
+
+# Docker / build
 *.tar
-dockerfiles.zip
+*.zip
+dist/
+.cache/
 
-# Node modules
-/node_modules/
+# OS
+.DS_Store
+Thumbs.db
