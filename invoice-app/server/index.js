@@ -297,7 +297,47 @@ app.post('/api/extract', (req, res) => {
 });
 
 // POST /nlp/extract - accepts OCR result JSON and returns structured prediction
-app.post('/nlp/extract', (req, res) => {
+app.post('/nlp/extract', async (req, res) => {
+  // If configured, try forwarding the request to an external NLP service.
+  // Try a list of candidates (environment override -> localhost host port -> compose service name).
+  // This makes local development (API running locally) work with the dockerized NLP mapped to host:8003,
+  // and keeps the original compose DNS name for containerized runs.
+  const forwardToken = process.env.NLP_API_TOKEN || null;
+  const candidates = [];
+  if (process.env.NLP_API_URL) candidates.push(process.env.NLP_API_URL);
+  // common host port mapping we use in compose: host 8003 -> container 8000
+  // The extracted NLP Flask app exposes its route under /nlp/extract (not /extract)
+  candidates.push('http://localhost:8003/nlp/extract');
+  // service name inside compose network
+  candidates.push('http://nlp_api:8000/nlp/extract');
+
+  // Prefer an explicit Authorization header from the incoming request, falling
+  // back to the configured NLP_API_TOKEN if present.
+  const incomingAuth = req.header('authorization');
+  const authHeader = incomingAuth || (forwardToken ? `Bearer ${forwardToken}` : null);
+  if (!authHeader) console.warn('No Authorization header for NLP forwarding (requests to NLP may be rejected)');
+
+  let forwardedSuccess = false;
+  for (const url of candidates) {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (authHeader) headers['Authorization'] = authHeader;
+      console.log(`Attempting to forward NLP request to ${url}`);
+      const forwarded = await axios.post(url, req.body || {}, { headers, timeout: 20000 });
+      if (forwarded && forwarded.data) {
+        forwardedSuccess = true;
+        return res.json(forwarded.data);
+      }
+    } catch (fErr) {
+      // don't throw — try next candidate
+      console.warn(`Forward to ${url} failed:`, fErr && fErr.message ? fErr.message : fErr);
+      continue;
+    }
+  }
+  if (!forwardedSuccess) {
+    console.warn('All external NLP forward attempts failed, falling back to local heuristic extraction');
+  }
+
   try {
     const { requestId: incomingRequestId, ocrText, ocrResult } = req.body || {};
     /*

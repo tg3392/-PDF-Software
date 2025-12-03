@@ -79,6 +79,29 @@ cd "D:\Studium\5.Semester\Softwaretechnik-Labor\-PDF-Software\invoice-app\server
 .\start_ocr_wrapper.ps1
 ```
 
+Container / Docker Compose (empfohlen)
+-----------------------------------
+
+Für die schnellere und konsistente lokale Ausführung empfehlen wir Docker Compose. Die Compose‑Konfiguration startet Frontend, API, OCR, NLP und Redis. Wichtige Hinweise:
+
+- Docker Desktop (oder ein laufender Docker‑Daemon) wird auf Windows empfohlen.
+- Das lokale NLP ist konfiguriert, um aus `server/nlp_service` gebaut zu werden (Image: `tg3392/invoice-app-nlp:local`). Alternativ kann ein externes Image benutzt werden.
+- Modellpfad: mounte das spaCy‑Modell unter `./nlp/invoice_nlp/model/model-best` — dieses Verzeichnis wird in den `nlp_api`‑Container gemountet (read‑only).
+- Volumes: Compose nutzt `./cache/feedback` und `./cache/pending_results` für Feedback/pending Daten sowie `./server/data.db` für die SQLite DB.
+
+Starten mit Docker Compose:
+
+```powershell
+docker compose -f docker-compose.yml up -d --build
+```
+
+Wichtige Diagnoseschritte:
+
+- Containerstatus anzeigen: `docker compose -f docker-compose.yml ps`
+- Logs beobachten: `docker compose -f docker-compose.yml logs api --tail 200 -f`
+- Healthchecks: Das `nlp_api` verwendet einen auth‑geschützten Healthcheck, der ein kleines POST an `/nlp/extract` macht und Antworten <500 als gesund wertet. Bei langen Modellladezeiten ggf. `timeout`/`retries` in `docker-compose.yml` erhöhen.
+
+
 Kurzer Smoke‑Test
 - OCR + NLP mit Beispiel‑PDF testen (PowerShell‑Beispiel):
 

@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Retrain spaCy model every day at 02:00 using collected feedback.
+0 2 * * * cd /app && /usr/local/bin/python scripts/retrain_from_feedback.py >> /var/log/cron.log 2>&1

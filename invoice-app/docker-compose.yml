@@ -1,0 +1,82 @@
+version: '3.8'
+services:
+  frontend:
+    image: tg3392/invoice-app-frontend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8000:80"
+    depends_on:
+      - api
+    networks:
+      - internal_net
+
+  api:
+    image: tg3392/invoice-app-api:latest
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/data.db:/app/data.db
+    environment:
+      - NODE_ENV=production
+      - NLP_API_URL=http://nlp_api:8000/extract
+      - NLP_API_TOKEN=secret-token
+      - OCR_WRAPPER_URL=http://ocr:8003/api/ocr
+    depends_on:
+      - redis
+    networks:
+      - internal_net
+
+  ocr:
+    image: tg3392/invoice-app-ocr:latest
+    build:
+      context: .
+      dockerfile: ocr/Dockerfile
+    ports:
+      - "8001:8003"
+    networks:
+      - internal_net
+
+  nlp_api:
+    build:
+      context: ./server/nlp_service
+      dockerfile: Dockerfile
+    image: tg3392/invoice-app-nlp:local
+    ports:
+      - "8003:8000"
+    environment:
+      - NLP_API_TOKEN=secret-token
+      - NLP_FEEDBACK_DIR=/app/feedback
+      - NLP_MODEL_PATH=/app/invoice_nlp/model/model-best
+      - NLP_PENDING_DIR=/app/pending_results
+    volumes:
+      - ./cache/feedback:/app/feedback
+      - ./cache/pending_results:/app/pending_results
+      - ./nlp/invoice_nlp/model:/app/invoice_nlp/model:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+    networks:
+      - internal_net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
+
+networks:
+  internal_net:
+    driver: bridge

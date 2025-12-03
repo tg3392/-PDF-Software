@@ -1,0 +1,29 @@
+﻿# Node modules
+node_modules/
+server/node_modules/
+
+# Python virtualenvs
+.venv/
+venv/
+
+# Compiled / cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Large app-specific
+extracted/
+nlp/**/model/
+nlp/**/model/**
+server/nlp_service/__pycache__/
+
+# Docker / build
+*.tar
+*.zip
+dist/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // listen on all interfaces so localhost (127.0.0.1) works reliably
-    host: '0.0.0.0',
+    // bind explicitly to IPv4 localhost to avoid proxy/hosts issues
+    host: '127.0.0.1',
     proxy: {
       // forward API calls to backend during development
       '/api': {

@@ -1,0 +1,32 @@
+Kurzanleitung zur Invoice App
+
+Diese Anleitung erklärt in einfachen Worten, wie du die wichtigsten Teile der App benutzt.
+
+1) Upload
+- Öffne den Bereich "Upload".
+- Ziehe die PDF‑Datei in das Feld oder klicke auf "Upload" und wähle die Datei aus.
+- Die App sendet die Datei an das Backend (`/api/ocr`) und erhält den OCR‑Text zurück.
+
+2) Überprüfung (Review)
+- Nach der Verarbeitung zeigt die Ansicht die erkannten Felder: Rechnungsnummer, Datum, Lieferant, Gesamt usw.
+- Du kannst jedes Feld manuell ändern.
+- Per "Feedback" kannst du falsche Erkennungen melden — dieses Feedback lässt sich später zum Verbessern des Modells nutzen.
+
+3) Lernen (Training)
+- Der Bereich "Lernen" zeigt derzeit Hinweise. In einem produktiven Setup würden hier geprüfte Beispiele gesammelt und zum Training verwendet.
+
+4) Export
+- Daten können als CSV oder JSON heruntergeladen werden.
+- Feedback‑Einträge lassen sich ebenfalls exportieren.
+
+Kurz, technisch
+- Upload an: `POST /api/ocr` (multipart/form-data `file`)
+- Analyse an: `POST /nlp/extract` (JSON `{ requestId?, ocrId?, ocrText }`)
+- Feedback an: `POST /nlp/feedback` oder `POST /api/feedbacks`
+- Finales Speichern: `POST /api/invoices`
+
+Wo laufen KI und DB?
+- KI (OCR/NLP) läuft als separater Service außerhalb der UI.
+- Datenbank: SQLite unter `server/data.db`.
+
+Das ist alles: kurz und praktisch — Upload, Prüfen, Korrigieren, Speichern.

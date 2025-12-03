@@ -1,0 +1,6 @@
+07c512385d1ff23db9693bb6fbcdf5fb  usr/lib/x86_64-linux-gnu/libgpgmepp.so.6.21.2
+f658278b5bb94511aa49676a650cbf3a  usr/share/doc/libgpgmepp6t64/README
+df491e8dc8720d7fe4a41f1eae7156ac  usr/share/doc/libgpgmepp6t64/changelog.Debian.gz
+2ae9ccba62d848fb12995754a771573a  usr/share/doc/libgpgmepp6t64/changelog.gz
+62dc9ecc797f9e5f0cf773ec90f35771  usr/share/doc/libgpgmepp6t64/copyright
+e61922356925926439a707c1ce8ea206  usr/share/lintian/overrides/libgpgmepp6t64

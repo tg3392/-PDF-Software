@@ -1,0 +1,112 @@
+{
+  "requestId": "req-1764682830552-473",
+  "timestamp": "2025-12-02T13:40:39.474698+00:00",
+  "requestPayload": {
+    "requestId": "req-1764682830552-473",
+    "ocrText": {
+      "metadata": {
+        "filename": "example-invoice-for-upload.pdf"
+      },
+      "pages": [
+        {
+          "page_number": 1,
+          "full_text": "Rechnung\nRechnungsnummer:\nINV-2025-1001\nRechnungsdatum:\n2025-11-30\nLeistungsdatum:\n2025-11-28\nLieferant\nMeine GmbH\nMusterstraße 1\n12345 Musterstadt\nBeispielkunde AG\nKundenstraße 5\n54321 Kundenstadt\nDE\nBeschreibung\nMenge\nEinheit\nEinzelpreis (netto)Gesamt (netto)\nBeratungsleistung: Softwareintegration\n10\nh\n75.00 €\n750.00 €\nSupport (monatlich)\n1\nService\n150.00 €\n150.00 €\nZwischensumme (netto)\n900.00 €\nUSt 19%\n171.00 €\nRechnungsbetrag (brutto)\n1071.00 €\nZahlungsziel: 14 Tage\nIBAN: DE89370400440532013000\nBIC: COBADEFFXXX\nVerwendungszweck: INV-2025-1001\nVielen Dank für Ihren Auftrag."
+        }
+      ]
+    }
+  },
+  "responsePayload": {
+    "requestId": "req-1764682830552-473",
+    "status": "ok",
+    "data": {
+      "type": "UNKNOWN",
+      "fields": [
+        {
+          "name": "INVOICE_NO",
+          "value": "INV-2025-1001",
+          "confidence": 0.0
+        },
+        {
+          "name": "INVOICE_DATE",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "SERVICE_DATE",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "SUPPLIER_NAME",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "SUPPLIER_ADDRESS_STREET",
+          "value": "Kundenstraße 5",
+          "confidence": 0.0
+        },
+        {
+          "name": "SUPPLIER_ADDRESS_CITY",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "CUSTOMER_NAME",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "CUSTOMER_ADDRESS_STREET",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "CUSTOMER_ADDRESS_CITY",
+          "value": "12345 Musterstadt",
+          "confidence": 0.0
+        },
+        {
+          "name": "VAT_ID",
+          "value": "DE89370400440532013000",
+          "confidence": 0.0
+        },
+        {
+          "name": "TAX_ID",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "PAYMENT_TERMS",
+          "value": "14 Tage",
+          "confidence": 0.0
+        },
+        {
+          "name": "TOTAL_GROSS",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "IBAN",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "BIC",
+          "value": "",
+          "confidence": 0.0
+        },
+        {
+          "name": "BANK_NAME",
+          "value": "",
+          "confidence": 0.0
+        }
+      ]
+    },
+    "warnings": [
+      "some fields missing"
+    ]
+  },
+  "statusCode": 200,
+  "text": "Rechnung\nRechnungsnummer:\nINV-2025-1001\nRechnungsdatum:\n2025-11-30\nLeistungsdatum:\n2025-11-28\nLieferant\nMeine GmbH\nMusterstraße 1\n12345 Musterstadt\nBeispielkunde AG\nKundenstraße 5\n54321 Kundenstadt\nDE\nBeschreibung\nMenge\nEinheit\nEinzelpreis (netto)Gesamt (netto)\nBeratungsleistung: Softwareintegration\n10\nh\n75.00 €\n750.00 €\nSupport (monatlich)\n1\nService\n150.00 €\n150.00 €\nZwischensumme (netto)\n900.00 €\nUSt 19%\n171.00 €\nRechnungsbetrag (brutto)\n1071.00 €\nZahlungsziel: 14 Tage\nIBAN: DE89370400440532013000\nBIC: COBADEFFXXX\nVerwendungszweck: INV-2025-1001\nVielen Dank für Ihren Auftrag."
+}

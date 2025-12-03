@@ -1,0 +1,13 @@
+913540db4c8e29b060aeeb44e9cf0d18  usr/bin/gpg
+0c4f895e4961500284eb7f418fc0f679  usr/lib/gnupg/keyboxd
+b15830c6a5c21daf5a0f2c652b9f4a88  usr/lib/systemd/user/keyboxd.service
+8bda83dcb00e35d1c10133b941aa207c  usr/lib/systemd/user/keyboxd.socket
+053d0ded7262e6745e8e7614a7addaa4  usr/share/doc/gpg/NEWS.Debian.gz
+71ccc1f450d1bbcaf82aa635ad0cdf45  usr/share/doc/gpg/README.Debian
+1544b78c8db7aac6bfc9e956a31c3618  usr/share/doc/gpg/changelog.Debian.amd64.gz
+171fcb8c1950236164fc3dbc138a870d  usr/share/doc/gpg/changelog.Debian.gz
+c6a90f24f63ed4a5a9a2de0d03cd64cd  usr/share/doc/gpg/changelog.gz
+34026339a310743ebec4d2ad6fb5127b  usr/share/doc/gpg/copyright
+bfa21d2be2e2a57b8cc7961583047f42  usr/share/lintian/overrides/gpg
+1ff582caa47ff9fa5c592ba75c39f331  usr/share/man/man1/gpg.1.gz
+4b9e35217034b0d1c13b4f82d041fecf  usr/share/man/man1/keyboxd.1.gz

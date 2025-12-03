@@ -1,0 +1,17 @@
+node_modules
+dist
+.vscode
+.git
+.gitignore
+npm-debug.log
+Dockerfile
+Dockerfile.frontend
+*.tar
+node_modules
+dist
+uploads
+.env
+*.log
+npm-debug.log
+Dockerfile
+docker-compose*.yml

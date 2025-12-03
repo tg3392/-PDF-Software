@@ -1,0 +1,2 @@
+libXrender 1 libxrender1 (>= 1:0.9.12)
+udeb: libXrender 1 libxrender1-udeb (>= 1:0.9.12)

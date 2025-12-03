@@ -1,15 +1,11 @@
-# Frontend Dockerfile - multi-stage: build with node, serve with nginx
-FROM node:18-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
+# syntax=docker/dockerfile:1
+FROM python:3.10-alpine
+WORKDIR /code
+ENV FLASK_APP=app.py
+ENV FLASK_RUN_HOST=0.0.0.0
+RUN apk add --no-cache gcc musl-dev linux-headers
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt
+EXPOSE 5000
 COPY . .
-RUN npm run build
-
-# Production image
-FROM nginx:stable-alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-# Optional: custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["flask", "run", "--debug"]

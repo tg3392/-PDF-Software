@@ -1,0 +1,25 @@
+name: Create Dockerfiles ZIP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package-dockerfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PowerShell
+        uses: actions/setup-powershell@v2
+
+      - name: Run packaging script
+        shell: pwsh
+        run: |
+          pwsh -c './package-dockerfiles.ps1 -Out dockerfiles.zip'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerfiles-zip
+          path: dockerfiles.zip

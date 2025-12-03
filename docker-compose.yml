@@ -6,7 +6,7 @@ services:
       context: ./invoice-app
       dockerfile: Dockerfile
     ports:
-      - "5173:80" # expose nginx on 5173 to avoid conflicts
+      - "5174:80" # expose nginx on 5174 to avoid host port conflicts
     depends_on:
       - backend
     restart: unless-stopped
@@ -25,8 +25,8 @@ services:
 
   ocr:
     build:
-      context: ./invoice-app/ocr
-      dockerfile: Dockerfile
+      context: ./invoice-app
+      dockerfile: ocr/Dockerfile
     ports:
       - "8003:8003"
     restart: unless-stopped
